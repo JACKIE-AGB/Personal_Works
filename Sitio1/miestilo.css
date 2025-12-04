@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Science+Gothic:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playwrite+US+Trad+Guides&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playwrite+NO:wght@100..400&display=swap');
+
+body{
+	background-color: lightgray;
+}
+
+h1 {
+	font-size: 100px;
+	color: red;
+	font-family: "Science Gothic", sans-serif;
+}
+
+p{
+	font-size: 18px;
+	color: #690924;
+	font-family: "Playwrite US Trad Guides", cursive;
+}
+
+h2{
+	font-size: 50px;
+	color: #17750F;
+	font-family: "Playwrite NO", cursive;
+}
