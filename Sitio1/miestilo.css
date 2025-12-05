@@ -52,3 +52,36 @@ th, td{
 th{
 	background-color: #0EEBC5;
 }
+
+.producto-lista{
+	display: flex;
+	flex-direction: wrap;
+	list-style-type: none;
+	padding: 0px;
+	gap: 20px;
+	justify-content: center;
+	align-items: flex-start; /*para que los tituplos no estiran la alienacion*/
+}
+
+.producto{
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	width: 150px; /*ajusta segun la necedidad*/
+}
+
+.producto img{
+	width: 150px;
+	height: 130px;
+	border-radius: 5px;
+	margin-bottom: 10px;
+}
+
+.producto h3{
+	font-size: 16px; /*ajusta el tamaño*/
+	margin: 0px;
+	padding: 5px;
+	background-color: transparent;
+	border-radius: 5px;
+}
