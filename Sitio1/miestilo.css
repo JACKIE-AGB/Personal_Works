@@ -10,16 +10,45 @@ h1 {
 	font-size: 100px;
 	color: red;
 	font-family: "Science Gothic", sans-serif;
+	text-align: center;
 }
 
 p{
 	font-size: 18px;
 	color: #690924;
 	font-family: "Playwrite US Trad Guides", cursive;
+	margin: 35px;
 }
 
 h2{
 	font-size: 50px;
 	color: #17750F;
 	font-family: "Playwrite NO", cursive;
+	text-align: center;
+}
+
+img{
+	width: 150px;
+	height: 100px;
+	border-radius: 10%; /*Redondea las imagenes*/
+	border: 3px solid #E31010; /*Grosor, estilo y color del borde*/
+	filter: drop-shadow(5px 5px 10px rgba(0, 0, 0, 0.5)); /*drop shadow (x, y, desenfoque, rgba (enfoque y opacidad))*/
+}
+
+table{
+	/*Relleno externo*/
+	margin-top: 20px;
+	margin-bottom: 20px;
+	margin-left: auto; /*centra la tabla horizontalmente*/
+	margin-right: auto;
+	margin: 20px auto; /*abreviadamente*/
+}
+
+th, td{
+	/*padding relleno interno*/
+	padding: 10px; /*Relleno en las 4 direcciones*/
+}
+
+th{
+	background-color: #0EEBC5;
 }
