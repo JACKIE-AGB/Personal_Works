@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Science+Gothic:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playwrite+US+Trad+Guides&display=swap');
+
+h1{
+	border: 2px solid black;
+	text-align: center;
+	margin: 0 700px 0 700px;
+	background-color: lightgreen;
+	font-family: "Science Gothic", sans-serif;
+}
+
+h2{
+	text-align: center;
+	font-family: "Bebas Neue", sans-serif;
+	margin-top: 25px;
+	margin-bottom: 25px;
+}
+
+p{
+	margin: 50px 50px 50px 50px;
+	text-align: center;
+	text-align: justify;
+	font-size: 18px;
+	font-family: "Playwrite US Trad Guides", cursive;
+	color: green;
+}
+
+/*
+explicacion box-shadow:
+box-shadow: desplazamientoX desplY blur spread color inset
+desplX: controla direccion horizontal de la sombra (positivo derecha, negativo izquierda)
+desplY: controla direccion vertical (positivo hacia abajo, negativo hacia arriba)
+blur: difuminado: que tan suave se ve la imagen, no puede ser negativo
+spread: expansion, que tanto crece o reduce el area de la sombra (positivo crece, egativo se encoge)
+*/
+
+img{ /*caracteristicas de las imagenes del contenedor*/
+	border: 2px solid black;
+	/*en formato cascada, en una sola linea funciona poner una sombra para ambos lados*/
+	box-shadow: 10px 10px 10px -5px rgba(0, 0, 0, 0.6); /*sombra de la derecha, 0.6(60%) de transparencia/opacidad*/
+}
+
+.imagenes{ /*caracteristicas del contenedor solo*/
+	display: flex;
+	justify-content: center;
+	gap: 40px; /*separación de imagenes*/
+}
+
+button{
+	border-color: black;
+	background-color: red;
+	font-family: "Open Sans";
+	height: 35px;
+	width: 85px;
+	font-size: 20px;
+	color: white;
+}
