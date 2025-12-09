@@ -2,6 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
 
+
 body{
 	background-color: lightgray;
 }
@@ -31,25 +32,37 @@ p{
 	color: #690924;
 }
 
-/*
-explicacion box-shadow:
-box-shadow: desplazamientoX desplY blur spread color inset
-desplX: controla direccion horizontal de la sombra (positivo derecha, negativo izquierda)
-desplY: controla direccion vertical (positivo hacia abajo, negativo hacia arriba)
-blur: difuminado: que tan suave se ve la imagen, no puede ser negativo
-spread: expansion, que tanto crece o reduce el area de la sombra (positivo crece, egativo se encoge)
-*/
-
-img{ /*caracteristicas de las imagenes del contenedor*/
+/*img{
+	height: 160px;
+	width: 220px;
 	border: 2px solid black;
-	/*en formato cascada, en una sola linea funciona poner una sombra para ambos lados*/
-	box-shadow: 10px 10px 10px -5px rgba(0, 0, 0, 0.6); /*sombra de la derecha, 0.6(60%) de transparencia/opacidad*/
+
+}*/
+
+ul{
+	display: flex;
+	flex-direction: wrap;
+	list-style-type: none;
+	padding: 0px;
+	gap: 50px;
+	justify-content: center;
+	align-items: flex-start; /*para que los tituplos no estiran la alienacion*/
 }
 
-.imagenes{ /*caracteristicas del contenedor solo*/
+encabezado{
 	display: flex;
+	flex-direction: wrap;
+	list-style-type: none;
+	padding: 0px;
+	gap: 0px;
 	justify-content: center;
-	gap: 40px; /*separación de imagenes*/
+	align-items: flex-start; /*para que los tituplos no estiran la alienacion*/
+}
+
+.general img{
+	width: 200px;
+	height: 170px;
+	border: 2px solid black;
 }
 
 button{
