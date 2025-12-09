@@ -17,6 +17,7 @@ h1{
 
 h2{
 	text-align: center;
+	align-items: center;
 	font-family: "Bebas Neue", sans-serif;
 	margin-top: 25px;
 	margin-bottom: 25px;
@@ -34,27 +35,23 @@ p{
 
 th{
 	padding-right: 100px;
+	font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+	color: steelblue;
 }
 
-table{
+table{ /*encabezados (cama ortopedica, etc)*/
 	margin: 20px auto;
 	text-align: center;
-	align-items: flex-end;
+	align-items: center;
 	gap: 30%;
-}
-
-.accesorios{
-	margin: 20px auto;
-	text-align: center;
-	align-items: flex-end;
-	gap: 30%;
-	justify-content: center;
 }
 
 .hijo_accesorios img{
-	height: 170px;
-	width: 190px;
-	border: 2px solid black;
+	padding-right: 0px;
+	margin-right: 25px;
+	height: 130px;
+	width: 150px;
+	border: black;
 }
 
 button{
