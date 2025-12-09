@@ -32,36 +32,28 @@ p{
 	color: #690924;
 }
 
-/*img{
-	height: 160px;
-	width: 220px;
-	border: 2px solid black;
-
-}*/
-
-ul{
-	display: flex;
-	flex-direction: wrap;
-	list-style-type: none;
-	padding: 0px;
-	gap: 50px;
-	justify-content: center;
-	align-items: flex-start; /*para que los tituplos no estiran la alienacion*/
+th{
+	padding-right: 100px;
 }
 
-encabezado{
-	display: flex;
-	flex-direction: wrap;
-	list-style-type: none;
-	padding: 0px;
-	gap: 0px;
-	justify-content: center;
-	align-items: flex-start; /*para que los tituplos no estiran la alienacion*/
+table{
+	margin: 20px auto;
+	text-align: center;
+	align-items: flex-end;
+	gap: 30%;
 }
 
-.general img{
-	width: 200px;
+.accesorios{
+	margin: 20px auto;
+	text-align: center;
+	align-items: flex-end;
+	gap: 30%;
+	justify-content: center;
+}
+
+.hijo_accesorios img{
 	height: 170px;
+	width: 190px;
 	border: 2px solid black;
 }
 
