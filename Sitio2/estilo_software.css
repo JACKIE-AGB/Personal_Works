@@ -8,6 +8,8 @@
 }
 
 h1{
+	font-family: Verdana, Geneva, Tahoma, sans-serif;
+	color: darkolivegreen;
 	font-size: 30px;
 	text-align: center;
 } 
@@ -59,7 +61,7 @@ h1{
 	text-align: justify;
 	margin-left: 10px;
 	margin-right: 10px;
-	height: 150px;
+	height: 120px;
 }
 
 .texto2 img{
@@ -68,5 +70,7 @@ h1{
 }
 
 .icono{
-	
+	height: 40px; /*modifica la altura del icono*/
+	transform: scaleX(0.2); /*modifica el ancho de la imagen sin alterar ni estirar , en caso que no funcione width*/
+	margin-top: 20px;
 }
