@@ -25,9 +25,9 @@ h1{
 
 img{
 	float: right;
+	height: 600px;
 	width: 850px;
 	margin-right: 150px;
-	/*box-shadow: 0 0 25px rgba(255, 0, 0, 0.3);*/
 	filter: drop-shadow(0 0 15px rgba(0, 0, 0, 0.4));
 }
 
@@ -40,9 +40,18 @@ img{
 	margin-bottom: 15px;
 }
 .cuadro2 p{
-	font-size: 25px;
+	font-size: 20px;
 	text-align: justify;
 	margin-left: 10px;
 	margin-right: 10px;
-	height: 150px;
+}
+
+button{
+	border-color: black;
+	background-color: red;
+	font-family: "Open Sans";
+	height: 35px;
+	width: 85px;
+	font-size: 20px;
+	color: white;
 }
