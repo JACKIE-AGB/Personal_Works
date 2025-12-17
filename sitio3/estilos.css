@@ -1,36 +1,44 @@
-ul{
-	list-style-type: none;
-	margin: 0;
-	padding: 0;
-	overflow: hidden;
-	background-color: #333333;
-	display: flex;
-	justify-content: right;
-	position: fixed;
-	top: 0;
-	width: 100%;
+* { /*todos los elementos*/
+	padding: 0px;
+	margin: 0px;
+	box-sizing: border-box;
 }
 
-ul li{
-	border-right: 1px solid #bbbbbb;
+.principal{
+	list-style: none;
+	background-color: black;
+	padding: 20px;
 }
 
-ul li:last-child{
-	border-right: none;
+.principal li{
+	position: relative;
+	display: inline-block;
 }
 
-ul li a{
+.principal li:hover ul{
 	display: block;
-	color: white;
-	text-align: center;
-	padding: 14px 16px;
+}
+
+.principal ul{
+	display: none;
+	position: absolute;
+	top:100%;
+	left:0;
+	background-color: black;
+}
+
+.principal ul li a{
+	display: block;
+	padding: 10px;
 	text-decoration: none;
+	color: lightgray;
 }
 
-ul li a:hover{
-	background-color: #111111;
+.principal ul li a:hover{
+	background-color: lightgray;
 }
 
-ul li a.active {
-	background-color: #04AA6D;
+.principal li a{
+	text-decoration: none;
+	padding: 10px;
 }
