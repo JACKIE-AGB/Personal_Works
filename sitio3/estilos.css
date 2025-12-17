@@ -6,7 +6,7 @@
 
 .principal{
 	list-style: none;
-	background-color: black;
+	background-color: lightgray; /*color de la banda principal de los li alineados*/
 	padding: 20px;
 }
 
@@ -24,21 +24,26 @@
 	position: absolute;
 	top:100%;
 	left:0;
-	background-color: black;
+	background-color: lightgray; /*color del background de los submenus de Productos*/
 }
 
 .principal ul li a{
 	display: block;
 	padding: 10px;
 	text-decoration: none;
-	color: lightgray;
+	color: white; /*color letras (cada li) de los submenus de produtos*/
 }
 
 .principal ul li a:hover{
-	background-color: lightgray;
+	background-color: lightgreen; /*color cuando pasa el mouse sobre los submenus de productos*/
 }
 
 .principal li a{
 	text-decoration: none;
-	padding: 10px;
+	padding: 20px;
+	color: white; /*color de la letras de cada LI principal*/
+}
+
+.principal li a:hover{
+	background-color: lightgreen; /*color de cuando pasa el mouse por cada li principal*/
 }
