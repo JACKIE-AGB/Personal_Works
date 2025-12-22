@@ -31,19 +31,19 @@
 	display: block;
 	padding: 10px;
 	text-decoration: none;
-	color: white; /*color letras (cada li) de los submenus de produtos*/
+	color: darkgray; /*color letras (cada li) de los submenus de produtos*/
 }
 
 .principal ul li a:hover{
-	background-color: lightgreen; /*color cuando pasa el mouse sobre los submenus de productos*/
+	background-color: darkgreen; /*color cuando pasa el mouse sobre los submenus de productos*/
 }
 
 .principal li a{
 	text-decoration: none;
 	padding: 20px;
-	color: white; /*color de la letras de cada LI principal*/
+	color: darkgray; /*color de la letras de cada LI principal*/
 }
 
 .principal li a:hover{
-	background-color: lightgreen; /*color de cuando pasa el mouse por cada li principal*/
+	background-color: darkgreen; /*color de cuando pasa el mouse por cada li principal*/
 }
