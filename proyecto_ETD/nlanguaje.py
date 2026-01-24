@@ -1,3 +1,4 @@
+#ver cuda en cmd: nvidia-smi
 from transformers import pipeline
 
 model = pipeline("summarization", model="facebook/bart-large-cnn")
