@@ -1,28 +1,24 @@
 from transformers import pipeline
-import torch
 
-#crear pipeline para la generacion del texto
 pipe = pipeline(
     "text-generation",
-    model="meta-llama/Llama-3.1-8B-Instruct",
-    torch_dtype=torch.float16,
-    device_map="auto",
-    trust_remote_code=True
+    model="google/functiongemma-270m-it",
+    device_map="auto"
 )
 
-#crear los mensajes
-messages = [
-    {"role": "system", "content": "Eres un asistente util en español"},
-    {"role": "user", "content": "¿Como puedo aprender a programar?"}
-]
+prompt = """###instruction:
+Resume el siguiente texto.
 
-#generar la respuesta
-outputs = pipe(
-    messages,
-    max_new_tokens=256,
-    temperature=0.7,
-    top_p=0.9,
-    do_sample=True
+### Input:
+Los modelos de lenguaje natural se entrenan con grandes cantidades de datos
+
+###Response:
+"""
+
+result = pipe(
+    prompt,
+    max_new_tokens=100,
+    temperature=0.6
 )
 
-print(outputs[0]['generated_text'][-1]['content'])
+print(result[0]["generated-text"])
