@@ -62,3 +62,21 @@ def render(self):
     self.screen.blit(self.background, (0, 0))
     self.pacman.render(self.screen)
     pygame.display.update()
+
+from nodes import NodeGroup
+
+def startgame(self):
+    self.setBackGround()
+    self.nodes.setupTestNodes()
+    self.pacman = Pacman()
+
+def render(self):
+    self.screen.blit(self.background, (0,0))
+    self.nodes.render(self.screen)
+    pygame.display.update()
+
+def startGame(self):
+    self.setBackGround()
+    self.nodes = NodeGroup()
+    self.nodes.setupTestNodes()
+    self.pacman = Pacman(self.nodes.nodeList[0])
