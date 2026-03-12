@@ -20,3 +20,10 @@ PACMAN = 0
 
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
+
+PORTAL = 3
+
+...
+PACMAN = 0
+PELLET = 1
+POWERPELLET = 2
