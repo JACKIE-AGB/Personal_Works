@@ -2,9 +2,11 @@ import pygame
 from pygame.local import *
 from vectors import Vector2
 from constant import *
+from entity import Entity
 
 class Pacman(object):
     def __init__(self, node):
+        Entity.__init__(self, node )
         self.name = PACMAN
         self.directions = {STOP:Vector2(), UP:Vector2(0,-1), DOWN:Vector2(0,1), LEFT:Vector2(-1,0), RIGHT:Vector2(1,0)}
 	    self.direction = STOP
@@ -63,7 +65,7 @@ def overshotTarget(self):
         return node2Self >= node2target
     return False
 
-def reverseDirection(self);
+def reverseDirection(self):
     self.direction *= -1
     temp = self.node
     self.node = self.target
