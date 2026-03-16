@@ -227,10 +227,10 @@ class Pacman:
 #  GHOST
 # ══════════════════════════════════════════════════
 GHOST_DEFS = [
-    {"name": "blinky", "start_tx": 13, "start_ty": 11, "home": (13, 11), "release_delay": 0  },
-    {"name": "pinky",  "start_tx": 14, "start_ty": 13, "home": (14, 13), "release_delay": 60 },
-    {"name": "inky",   "start_tx": 13, "start_ty": 13, "home": (13, 13), "release_delay": 120},
-    {"name": "clyde",  "start_tx": 15, "start_ty": 13, "home": (15, 13), "release_delay": 180},
+    {"name": "ml_agent", "start_tx": 13, "start_ty": 11, "home": (13, 11), "release_delay": 0  }, # <-- ¡Tu IA!
+    {"name": "pinky",    "start_tx": 14, "start_ty": 13, "home": (14, 13), "release_delay": 60 },
+    {"name": "inky",     "start_tx": 13, "start_ty": 13, "home": (13, 13), "release_delay": 120},
+    {"name": "clyde",    "start_tx": 15, "start_ty": 13, "home": (15, 13), "release_delay": 180},
 ]
 
 class Ghost:

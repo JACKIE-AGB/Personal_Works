@@ -84,6 +84,44 @@ GHOST_AI = {
     "clyde":  ClydeAI(),
 }
 
+# ─────────────────────────────────────────────────────────
+#  Integración para Modelos de Machine Learning
+# ─────────────────────────────────────────────────────────
+
+class MLAgentAI:
+    """Clase para conectar tu modelo de Red Neuronal / RL."""
+    COLOR = (150, 255, 100) # Verde neón para identificar a la IA entrenada
+    NAME  = "ml_agent"
+
+    def __init__(self):
+        # Aquí cargarás tu modelo en el futuro:
+        # self.model = tf.keras.models.load_model('mi_agente.h5')
+        pass
+
+    def get_action(self, ghost, pacman, all_ghosts, maze):
+        """
+        En lugar de devolver un objetivo para BFS, devuelve la acción directa.
+        """
+        # 1. Construir el estado (lo que ve la IA)
+        # state = [ghost.tx, ghost.ty, pacman.tx, pacman.ty, ...]
+        
+        # 2. Pedir predicción al modelo
+        # predicted_action = self.model.predict(state)
+        
+        # SIMULACIÓN TEMPORAL: Movimiento aleatorio válido
+        valid_dirs = []
+        opp = OPPOSITES.get(ghost.direction)
+        for d in ALL_DIRS:
+            if d == opp: continue # Evitar que regrese por donde vino
+            dx, dy = DIRECTION_VECTORS[d]
+            if _is_passable(ghost.tx + dx, ghost.ty + dy, maze):
+                valid_dirs.append(d)
+                
+        return random.choice(valid_dirs) if valid_dirs else ghost.direction
+
+# Agregamos el agente al registro
+GHOST_AI["ml_agent"] = MLAgentAI()
+
 # Scatter corner per ghost (used in scatter mode)
 SCATTER_CORNERS = {
     "blinky": (COLS - 2, 1),
@@ -164,17 +202,13 @@ def compute_ghost_direction(ghost, pacman, all_ghosts, maze):
     """
     Main function called by the game each tick per ghost.
     Returns a direction string: "up" | "down" | "left" | "right"
-
-    ghost.mode can be: "scatter" | "chase" | "frightened" | "eaten"
     """
-
     # ── Frightened: random valid direction
     if ghost.mode == "frightened":
         opp = OPPOSITES.get(ghost.direction)
         valid = []
         for d in ALL_DIRS:
-            if d == opp:
-                continue
+            if d == opp: continue
             dx, dy = DIRECTION_VECTORS[d]
             if _is_passable(ghost.tx + dx, ghost.ty + dy, maze):
                 valid.append(d)
@@ -190,7 +224,12 @@ def compute_ghost_direction(ghost, pacman, all_ghosts, maze):
         tx, ty = SCATTER_CORNERS.get(ghost.name, (ghost.tx, ghost.ty))
         return _bfs(ghost.tx, ghost.ty, tx, ty, ghost.direction, maze)
 
-    # ── Chase: use personality AI
+    # ── NUEVO: Intercepción para Machine Learning ──
+    if ghost.name == "ml_agent":
+        # La IA decide la acción directa, ignoramos el BFS
+        return GHOST_AI["ml_agent"].get_action(ghost, pacman, all_ghosts, maze)
+
+    # ── Chase: use personality AI (BFS normal)
     ai = GHOST_AI.get(ghost.name)
     if ai:
         tx, ty = ai.get_target(ghost, pacman, all_ghosts, maze)
