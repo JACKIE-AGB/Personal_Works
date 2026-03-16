@@ -637,12 +637,12 @@ class Game:
                         self._new_game()
                         self.state       = "ready"
                         self.ready_timer = FPS + 30
-                if event.key in KEY_DIR and self.state == "playing":
+                if event.key in KEY_DIR and self.state in ("playing", "ready"):
                     self.pacman.set_next_dir(KEY_DIR[event.key])
 
         # Held keys for smooth turning
         pressed = pygame.key.get_pressed()
-        if self.state == "playing":
+        if self.state in ("playing", "ready"):
             for k, d in KEY_DIR.items():
                 if pressed[k]:
                     self.pacman.set_next_dir(d)
