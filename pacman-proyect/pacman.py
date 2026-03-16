@@ -140,7 +140,7 @@ class Pacman:
         nty = self.ty + dy
         cx  = tile_center(self.tx)
         cy  = tile_center(self.ty)
-        near_center = abs(self.px - cx) < PACMAN_SPEED + 1 and abs(self.py - cy) < PACMAN_SPEED + 1
+        near_center = abs(self.px - cx) < 2 and abs(self.py - cy) < 2
 
         if near_center and _is_passable(ntx, nty, maze):
             self.direction = self.next_dir
@@ -151,13 +151,15 @@ class Pacman:
         dx, dy = DIRECTION_VECTORS[self.direction]
         npx = self.px + dx * PACMAN_SPEED
         npy = self.py + dy * PACMAN_SPEED
-        check_tx = round(npx / TS)
-        check_ty = round(npy / TS)
+
+        check_tx = px_to_tile(npx)
+        check_ty = px_to_tile(npy)
 
         if _is_passable(check_tx, check_ty, maze):
             self.px = npx
             self.py = npy
         else:
+            # centrarlo en el tile actual
             self.px = float(tile_center(self.tx))
             self.py = float(tile_center(self.ty))
 
