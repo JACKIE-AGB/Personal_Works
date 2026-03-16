@@ -105,13 +105,13 @@ def tile_center(t):
     return t * TS + TS // 2
 
 def px_to_tile(px):
-    return int((px + TS // 2) // TS)
+    return int(px // TS)
 
 # ══════════════════════════════════════════════════
 #  PACMAN
 # ══════════════════════════════════════════════════
 class Pacman:
-    START_TX, START_TY = 14, 23
+    START_TX, START_TY = 13, 27
 
     def __init__(self):
         self.reset()
@@ -140,7 +140,7 @@ class Pacman:
         nty = self.ty + dy
         cx  = tile_center(self.tx)
         cy  = tile_center(self.ty)
-        near_center = abs(self.px - cx) < 2 and abs(self.py - cy) < 2
+        near_center = abs(self.px - cx) < PACMAN_SPEED + 1 and abs(self.py - cy) < PACMAN_SPEED + 1
 
         if near_center and _is_passable(ntx, nty, maze):
             self.direction = self.next_dir
@@ -151,17 +151,18 @@ class Pacman:
         dx, dy = DIRECTION_VECTORS[self.direction]
         npx = self.px + dx * PACMAN_SPEED
         npy = self.py + dy * PACMAN_SPEED
-
-        check_tx = px_to_tile(npx)
-        check_ty = px_to_tile(npy)
+        check_tx = int(npx // TS) % COLS
+        check_ty = max(0, min(ROWS - 1, int(npy // TS)))
 
         if _is_passable(check_tx, check_ty, maze):
             self.px = npx
             self.py = npy
         else:
-            # centrarlo en el tile actual
-            self.px = float(tile_center(self.tx))
-            self.py = float(tile_center(self.ty))
+            # Solo frenamos el eje en movimiento para no romper el otro
+            if dx != 0:
+                self.px = float(tile_center(self.tx))
+            if dy != 0:
+                self.py = float(tile_center(self.ty))
 
         # Tunnel wrap
         if self.px < -TS // 2:
@@ -170,8 +171,8 @@ class Pacman:
             self.px = float(-TS // 2)
 
         # Update tile
-        self.tx = int(((self.px + TS // 2) // TS) % COLS)
-        self.ty = max(0, min(ROWS - 1, int((self.py + TS // 2) // TS)))
+        self.tx = int(self.px // TS) % COLS
+        self.ty = max(0, min(ROWS - 1, int(self.py // TS)))
 
         # Mouth animation
         self.mouth += self.mouth_inc
@@ -281,8 +282,8 @@ class Ghost:
         dv = DIRECTION_VECTORS[self.direction]
         npx = self.px + dv[0] * speed
         npy = self.py + dv[1] * speed
-        ntx = round(npx / TS)
-        nty = round(npy / TS)
+        ntx = int(npx // TS) % COLS
+        nty = max(0, min(ROWS - 1, int(npy // TS)))
 
         if _is_passable(ntx, nty, maze):
             self.px = npx
@@ -294,8 +295,8 @@ class Ghost:
         elif self.px > COLS * TS + TS // 2:
             self.px = float(-TS // 2)
 
-        self.tx = int(((self.px + TS // 2) // TS) % COLS)
-        self.ty = max(0, min(ROWS - 1, int((self.py + TS // 2) // TS)))
+        self.tx = int(self.px // TS) % COLS
+        self.ty = max(0, min(ROWS - 1, int(self.py // TS)))
 
     def draw(self, surf, anim_frame, frightened_timer):
         cx = int(self.px)
@@ -637,12 +638,12 @@ class Game:
                         self._new_game()
                         self.state       = "ready"
                         self.ready_timer = FPS + 30
-                if event.key in KEY_DIR and self.state in ("playing", "ready"):
+                if event.key in KEY_DIR and self.state == "playing":
                     self.pacman.set_next_dir(KEY_DIR[event.key])
 
         # Held keys for smooth turning
         pressed = pygame.key.get_pressed()
-        if self.state in ("playing", "ready"):
+        if self.state == "playing":
             for k, d in KEY_DIR.items():
                 if pressed[k]:
                     self.pacman.set_next_dir(d)
