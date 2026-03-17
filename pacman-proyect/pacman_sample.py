@@ -7,7 +7,9 @@ from ghostIA_sample import GhostAI
 # CONFIGURACIÓN Y CONSTANTES VISUALES (Adaptadas del segundo código)
 # ==============================================================================
 TILE_SIZE = 30
-FPS = 10  # Velocidad del juego (cuántos movimientos por segundo)
+FPS = 10           # Velocidad del juego (cuántos movimientos por segundo)
+HUD_H = 50         # Altura del HUD inferior en píxeles
+LIVES_START = 3    # Vidas iniciales
 
 # Colores (Copiados para mayor fidelidad visual)
 BLACK       = (0, 0, 0)
@@ -30,7 +32,7 @@ LEVEL = [
     "1011010111110101101",
     "1000010001000100001",
     "1111011101011101111",
-    "000101000G000101000",
+    "000101000GGGG101000",  # 4 fantasmas: Blinky(R), Pinky(P), Inky(C), Clyde(O)
     "1111010111110101111",
     "100000000P000000001",
     "1011011101011101101",
@@ -169,128 +171,222 @@ class Entity:
 def main():
     pygame.init()
     
-    # Configurar ventana
-    width = len(LEVEL[0]) * TILE_SIZE
-    height = len(LEVEL) * TILE_SIZE
-    screen = pygame.display.set_mode((width, height))
+    # Configurar ventana (con espacio para HUD)
+    map_width  = len(LEVEL[0]) * TILE_SIZE
+    map_height = len(LEVEL)    * TILE_SIZE
+    screen = pygame.display.set_mode((map_width, map_height + HUD_H))
     pygame.display.set_caption("Pac-Man Prototipo: Gráficos Intuitivos")
     clock = pygame.time.Clock()
 
-    # Convertir el mapa de strings a una lista de listas modificable
-    grid = [list(row) for row in LEVEL]
-    
-    pacman = None
-    ghosts = []
-    
-    # Inicializar IA de los fantasmas (usando el archivo separado)
-    ai_random = GhostAI(ai_type="random")
-    ai_chaser = GhostAI(ai_type="chase")
+    # Fuentes para HUD y pantallas
+    font_hud    = pygame.font.SysFont("couriernew", 15, bold=True)
+    font_big    = pygame.font.SysFont("couriernew", 30, bold=True)
+    font_medium = pygame.font.SysFont("couriernew", 17, bold=True)
 
-    # Encontrar posiciones iniciales y asignar colores fieles
-    ghost_colors = [RED, PINK, CYAN, ORANGE] # Colores originales de los fantasmas
+    # ── IA disponibles ────────────────────────────────────────────────────────
+    ai_chaser = GhostAI(ai_type="chase")
+    ai_random = GhostAI(ai_type="random")
+
+    # Tabla de IAs y nombres por fantasma (orden de aparición en el mapa)
+    GHOST_DEFS = [
+        {"color": RED,    "name": "Blinky", "ia": ai_chaser},  # 0 - perseguidor
+        {"color": PINK,   "name": "Pinky",  "ia": ai_random},  # 1 - aleatorio
+        {"color": CYAN,   "name": "Inky",   "ia": ai_chaser},  # 2 - perseguidor
+        {"color": ORANGE, "name": "Clyde",  "ia": ai_random},  # 3 - aleatorio
+    ]
+
+    # ── Función de reset de posiciones (sin borrar puntos ya comidos) ─────────
+    def reset_positions():
+        """Regresa a Pac-Man y los fantasmas a su posición inicial."""
+        pacman.x, pacman.y = pacman_start
+        pacman.direction   = (1, 0)
+        for i, g in enumerate(ghosts):
+            g['entity'].x, g['entity'].y = ghost_starts[i]
+            g['entity'].direction        = (1, 0)
+
+    # ── Función de reset completo (nueva partida) ─────────────────────────────
+    def full_reset():
+        nonlocal score, lives, game_state, grid
+        score      = 0
+        lives      = LIVES_START
+        game_state = "playing"
+        grid[:]    = [list(row) for row in LEVEL]
+        # Limpiar marcadores de G/P del grid
+        for y, row in enumerate(grid):
+            for x, col in enumerate(row):
+                if col in ('P', 'G'):
+                    grid[y][x] = '0'
+        reset_positions()
+
+    # ── Parsear mapa inicial ──────────────────────────────────────────────────
+    grid    = [list(row) for row in LEVEL]
+    pacman  = None
+    ghosts  = []
     g_count = 0
-    
+
     for y, row in enumerate(grid):
         for x, col in enumerate(row):
             if col == 'P':
-                pacman = Entity(x, y, YELLOW)
-                grid[y][x] = ' ' # Limpiar casilla
+                pacman      = Entity(x, y, YELLOW)
+                grid[y][x]  = '0'    # Deja un punto en el inicio
             elif col == 'G':
-                # Asignar una IA y color diferente a cada fantasma 'G' encontrado
-                ia = ai_chaser if g_count % 2 == 0 else ai_random
-                color = ghost_colors[g_count % len(ghost_colors)]
-                ghosts.append({'entity': Entity(x, y, color), 'ia': ia})
-                grid[y][x] = ' '
-                g_count += 1
+                defn = GHOST_DEFS[g_count % len(GHOST_DEFS)]
+                ghosts.append({
+                    'entity': Entity(x, y, defn["color"]),
+                    'ia':     defn["ia"],
+                    'name':   defn["name"],
+                })
+                grid[y][x] = '0'     # Celda libre bajo el fantasma
+                g_count    += 1
 
-    # Variables de control
-    pacman_dx, pacman_dy = 0, 0
-    score = 0
-    anim_frame = 0 # Contador para animaciones
-    running = True
+    # Guardar posiciones de inicio para respawn
+    pacman_start = (pacman.x, pacman.y)
+    ghost_starts = [(g['entity'].x, g['entity'].y) for g in ghosts]
 
-    while running:
-        anim_frame += 1 # Incrementar frame de animación
+    # ── Variables de control ──────────────────────────────────────────────────
+    pacman_dx  = 0
+    pacman_dy  = 0
+    score      = 0
+    lives      = LIVES_START
+    anim_frame = 0
+    game_state = "playing"   # "playing" | "gameover"
 
-        # 1. Manejo de eventos (Teclado)
+    # ── Bucle principal ───────────────────────────────────────────────────────
+    while True:
+        anim_frame += 1
+
+        # ── 1. Eventos ────────────────────────────────────────────────────────
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                pygame.quit()
+                sys.exit()
+
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
-                    pacman_dx, pacman_dy = 0, -1
-                elif event.key == pygame.K_DOWN:
-                    pacman_dx, pacman_dy = 0, 1
-                elif event.key == pygame.K_LEFT:
-                    pacman_dx, pacman_dy = -1, 0
-                elif event.key == pygame.K_RIGHT:
-                    pacman_dx, pacman_dy = 1, 0
+                if game_state == "playing":
+                    if event.key == pygame.K_UP:
+                        pacman_dx, pacman_dy = 0, -1
+                    elif event.key == pygame.K_DOWN:
+                        pacman_dx, pacman_dy = 0,  1
+                    elif event.key == pygame.K_LEFT:
+                        pacman_dx, pacman_dy = -1, 0
+                    elif event.key == pygame.K_RIGHT:
+                        pacman_dx, pacman_dy =  1, 0
 
-        # 2. Lógica de Pac-Man (Movimiento por cuadrícula)
-        next_px, next_py = pacman.x + pacman_dx, pacman.y + pacman_dy
-        # Validar si Pac-Man choca con pared
-        if 0 <= next_py < len(grid) and 0 <= next_px < len(grid[0]) and grid[next_py][next_px] != '1':
-            pacman.x, pacman.y = next_px, next_py
-            pacman.direction = (pacman_dx, pacman_dy) # Actualizar dirección para dibujo
-            
-            # Comer punto
-            if grid[pacman.y][pacman.x] == '0':
-                grid[pacman.y][pacman.x] = ' '
-                score += 10
+                elif game_state == "gameover":
+                    if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                        full_reset()           # Jugar de nuevo
+                    elif event.key == pygame.K_ESCAPE:
+                        pygame.quit()
+                        sys.exit()
 
-        # 3. Lógica de Fantasmas (Consultando ghosts_ia.py)
-        for g in ghosts:
-            ghost_obj = g['entity']
-            ia_module = g['ia']
-            
-            # Le pasamos el estado actual al cerebro del fantasma
-            move_dx, move_dy = ia_module.decide_move(
-                (ghost_obj.x, ghost_obj.y), 
-                (pacman.x, pacman.y), 
-                grid
-            )
-            
-            ghost_obj.x += move_dx
-            ghost_obj.y += move_dy
-            if move_dx != 0 or move_dy != 0:
-                ghost_obj.direction = (move_dx, move_dy) # Actualizar dirección para ojos
+        # ── 2. Lógica (solo si se está jugando) ───────────────────────────────
+        if game_state == "playing":
 
-            # Comprobar colisión (GameOver)
-            if ghost_obj.x == pacman.x and ghost_obj.y == pacman.y:
-                print(f"¡Fin del juego! Puntuación final: {score}")
-                running = False
+            # Movimiento de Pac-Man
+            next_px = pacman.x + pacman_dx
+            next_py = pacman.y + pacman_dy
+            if (0 <= next_py < len(grid) and
+                    0 <= next_px < len(grid[0]) and
+                    grid[next_py][next_px] != '1'):
+                pacman.x, pacman.y = next_px, next_py
+                pacman.direction   = (pacman_dx, pacman_dy)
+                if grid[pacman.y][pacman.x] == '0':
+                    grid[pacman.y][pacman.x] = ' '
+                    score += 10
 
-        # 4. DIBUJAR EN PANTALLA
+            # Movimiento de Fantasmas
+            for g in ghosts:
+                ghost_obj  = g['entity']
+                ia_module  = g['ia']
+                move_dx, move_dy = ia_module.decide_move(
+                    (ghost_obj.x, ghost_obj.y),
+                    (pacman.x,    pacman.y),
+                    grid
+                )
+                ghost_obj.x += move_dx
+                ghost_obj.y += move_dy
+                if move_dx != 0 or move_dy != 0:
+                    ghost_obj.direction = (move_dx, move_dy)
+
+            # Colisión Pac-Man ↔ Fantasma
+            for g in ghosts:
+                if g['entity'].x == pacman.x and g['entity'].y == pacman.y:
+                    lives -= 1
+                    if lives <= 0:
+                        lives      = 0
+                        game_state = "gameover"
+                    else:
+                        reset_positions()   # Respawn: vuelven al inicio
+                    break                   # Solo procesar una colisión por frame
+
+        # ── 3. Dibujar ────────────────────────────────────────────────────────
         screen.fill(BLACK)
-        
-        # Dibujar mapa (Con gráficos mejorados)
+
+        # Mapa
         for y, row in enumerate(grid):
             for x, col in enumerate(row):
                 rx, ry = x * TILE_SIZE, y * TILE_SIZE
-                if col == '1': # Pared (estilo neón azul)
-                    # Dibujar líneas de borde para que parezca más el clásico
-                    pygame.draw.rect(screen, MAZE_BLUE, (rx, ry, TILE_SIZE, TILE_SIZE), 2)
+                if col == '1':
+                    pygame.draw.rect(screen, MAZE_BLUE,   (rx, ry, TILE_SIZE, TILE_SIZE), 2)
                     pygame.draw.rect(screen, MAZE_BRIGHT, (rx+2, ry+2, TILE_SIZE-4, TILE_SIZE-4), 1)
+                elif col == '0':
+                    cx_dot = rx + TILE_SIZE // 2
+                    cy_dot = ry + TILE_SIZE // 2
+                    pygame.draw.circle(screen, DOT_COLOR, (cx_dot, cy_dot), 3)
 
-                elif col == '0': # Punto a comer (usando DOT_COLOR)
-                    cx, cy = rx + TILE_SIZE // 2, ry + TILE_SIZE // 2
-                    pygame.draw.circle(screen, DOT_COLOR, (cx, cy), 3)
-
-        # Dibujar entidades USANDO LOS NUEVOS MÉTODOS AVANZADOS
+        # Entidades
         pacman.draw_pacman(screen, anim_frame)
         for g in ghosts:
             g['entity'].draw_ghost(screen, anim_frame)
 
-        # (Opcional) Dibujar puntuación
-        # font = pygame.font.SysFont(None, 24)
-        # score_text = font.render(f'Score: {score}', True, WHITE)
-        # screen.blit(score_text, (10, 10))
+        # HUD inferior
+        hud_y = map_height + 8
+        # Puntuación
+        score_surf = font_hud.render(f"SCORE  {score:>6}", True, WHITE)
+        screen.blit(score_surf, (map_width // 4 - score_surf.get_width() // 2, hud_y))
+        # Vidas (texto)
+        lives_label = font_hud.render("VIDAS", True, WHITE)
+        screen.blit(lives_label, (map_width * 3 // 4 - 30, hud_y))
+        # Íconos de vidas (mini Pac-Man)
+        icon_y = hud_y + 20
+        for i in range(lives):
+            lx = map_width * 3 // 4 + 10 + i * 20
+            r  = 7
+            points = [(lx, icon_y)]
+            for step in range(21):
+                a = math.radians(35 + step * (290 / 20))
+                points.append((lx + int(r * math.cos(a)), icon_y - int(r * math.sin(a))))
+            if len(points) >= 3:
+                pygame.draw.polygon(screen, YELLOW, points)
+        if lives == 0:
+            empty = font_hud.render("---", True, RED)
+            screen.blit(empty, (map_width * 3 // 4 + 10, icon_y - 6))
+
+        # Pantalla de Game Over
+        if game_state == "gameover":
+            overlay = pygame.Surface((map_width, map_height), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 200))
+            screen.blit(overlay, (0, 0))
+
+            def draw_centered(text, color, y, font):
+                surf = font.render(text, True, color)
+                screen.blit(surf, (map_width // 2 - surf.get_width() // 2, y))
+
+            cx_mid = map_height // 2
+            draw_centered("GAME OVER",           RED,    cx_mid - 60, font_big)
+            draw_centered(f"PUNTUACIÓN: {score}", WHITE,  cx_mid - 10, font_medium)
+            pygame.draw.line(screen, (80, 80, 80),
+                             (map_width // 4, cx_mid + 20),
+                             (3 * map_width // 4, cx_mid + 20), 1)
+
+            blink = (anim_frame // 20) % 2 == 0
+            enter_col = YELLOW if blink else (160, 120, 0)
+            esc_col   = (200, 70, 70) if not blink else (130, 40, 40)
+            draw_centered("[ENTER]  JUGAR DE NUEVO", enter_col, cx_mid + 32, font_medium)
+            draw_centered("[ESC]    SALIR",           esc_col,   cx_mid + 58, font_medium)
 
         pygame.display.flip()
         clock.tick(FPS)
-
-    pygame.quit()
-    sys.exit()
 
 if __name__ == "__main__":
     main()
