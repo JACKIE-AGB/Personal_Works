@@ -2,7 +2,7 @@ import gradio as gr
 import requests
 import os
 
-API_URL = "http://localhost:8000"  # BUG CORREGIDO: era "https//"
+API_URL = "http://localhost:8000"
 
 
 # ─────────────────────────────────────────────
@@ -27,19 +27,20 @@ def subir_pdf(pdf_file):
             chars = data.get("caracteres", 0)
             return f"✅ {data['status']}\n📊 {chars} caracteres extraídos\n\n📄 Vista previa:\n{preview}"
         return f"❌ Error: {data.get('detail', r.text)}"
+    except requests.exceptions.ConnectionError:
+        return "❌ No se pudo conectar con la API. Asegúrate de que api.py esté corriendo en el puerto 8000."
     except Exception as e:
-        return f"❌ Error de conexión: {e}"
+        return f"❌ Error inesperado: {e}"
 
 
 def buscar_en_carpeta(carpeta: str, nombre_busqueda: str, ruta_relativa: str):
     """
     Busca archivos en una carpeta del servidor.
-    - carpeta:         Ruta de la carpeta, ej: /home/usuario/documentos
-    - nombre_busqueda: Texto en el nombre del archivo (opcional)
-    - ruta_relativa:   Ruta exacta dentro de la carpeta, ej: Proyectos/informe.pdf
+    Siempre devuelve 3 valores: (mensaje, dropdown_update, rutas_map)
     """
+    # BUG CORREGIDO: todos los returns ahora incluyen el tercer valor (rutas_map)
     if not carpeta.strip():
-        return "⚠️ Escribe la ruta de una carpeta.", gr.update(choices=[], value=None)
+        return "⚠️ Escribe la ruta de una carpeta.", gr.update(choices=[], value=None), {}
 
     payload = {"carpeta": carpeta.strip()}
     if nombre_busqueda.strip():
@@ -51,20 +52,20 @@ def buscar_en_carpeta(carpeta: str, nombre_busqueda: str, ruta_relativa: str):
         r = requests.post(f"{API_URL}/buscar_en_carpeta", json=payload, timeout=10)
         data = r.json()
         if r.status_code != 200:
-            return f"❌ Error: {data.get('detail', r.text)}", gr.update(choices=[], value=None)
+            # BUG CORREGIDO: faltaba el tercer valor {} aquí
+            return f"❌ Error: {data.get('detail', r.text)}", gr.update(choices=[], value=None), {}
 
         archivos = data.get("archivos", [])
         total = data.get("total_encontrados", 0)
 
         if total == 0:
-            return "⚠️ No se encontraron archivos.", gr.update(choices=[], value=None)
+            # BUG CORREGIDO: faltaba el tercer valor {} aquí
+            return "⚠️ No se encontraron archivos.", gr.update(choices=[], value=None), {}
 
-        # Opciones para el dropdown: "nombre (ruta_relativa)"
         opciones = [
             f"{a['nombre']}  →  {a.get('ruta_relativa', a['ruta_completa'])}"
             for a in archivos
         ]
-        # Guardamos la ruta completa en un dict para recuperarla al seleccionar
         rutas_map = {
             f"{a['nombre']}  →  {a.get('ruta_relativa', a['ruta_completa'])}": a["ruta_completa"]
             for a in archivos
@@ -73,8 +74,10 @@ def buscar_en_carpeta(carpeta: str, nombre_busqueda: str, ruta_relativa: str):
         resumen = f"✅ {total} archivo(s) encontrado(s) en '{carpeta}'"
         return resumen, gr.update(choices=opciones, value=opciones[0] if opciones else None), rutas_map
 
+    except requests.exceptions.ConnectionError:
+        return "❌ No se pudo conectar con la API. ¿Está corriendo api.py?", gr.update(choices=[], value=None), {}
     except Exception as e:
-        return f"❌ Error de conexión: {e}", gr.update(choices=[], value=None), {}
+        return f"❌ Error inesperado: {e}", gr.update(choices=[], value=None), {}
 
 
 def cargar_archivo_seleccionado(seleccion: str, rutas_map: dict):
@@ -96,6 +99,8 @@ def cargar_archivo_seleccionado(seleccion: str, rutas_map: dict):
             preview = data.get("preview", "")
             return f"✅ {data['status']}\n📂 {ruta}\n📊 {chars} caracteres\n\n📄 Vista previa:\n{preview}"
         return f"❌ Error: {data.get('detail', r.text)}"
+    except requests.exceptions.ConnectionError:
+        return "❌ No se pudo conectar con la API. ¿Está corriendo api.py?"
     except Exception as e:
         return f"❌ Error de conexión: {e}"
 
@@ -115,6 +120,8 @@ def hacer_pregunta(pregunta: str, max_tokens: int):
             archivo = data.get("archivo", "desconocido")
             return f"📂 Documento: {archivo}\n\n💬 {data['respuesta']}"
         return f"❌ Error: {data.get('detail', r.text)}"
+    except requests.exceptions.ConnectionError:
+        return "❌ No se pudo conectar con la API. Asegúrate de que api.py esté corriendo en el puerto 8000."
     except Exception as e:
         return f"❌ Error de conexión: {e}"
 
@@ -129,8 +136,10 @@ def ver_estado():
             f"📄 Archivo cargado: {d['archivo_cargado']}\n"
             f"📊 Caracteres en contexto: {d['caracteres_en_contexto']}"
         )
+    except requests.exceptions.ConnectionError:
+        return "❌ No se pudo conectar con la API. Asegúrate de que api.py esté corriendo:\n  uvicorn api:app --host 0.0.0.0 --port 8000"
     except Exception as e:
-        return f"❌ No se pudo conectar con la API: {e}"
+        return f"❌ Error inesperado: {e}"
 
 
 # ─────────────────────────────────────────────
@@ -139,7 +148,6 @@ def ver_estado():
 
 with gr.Blocks(title="📄 PDF QA con IA", theme=gr.themes.Soft()) as demo:
 
-    # Estado interno para guardar el mapa ruta
     rutas_state = gr.State({})
 
     gr.Markdown(
@@ -150,7 +158,6 @@ with gr.Blocks(title="📄 PDF QA con IA", theme=gr.themes.Soft()) as demo:
         """
     )
 
-    # ── Sección de estado ──────────────────────────────
     with gr.Accordion("🔌 Estado del servidor", open=False):
         btn_estado = gr.Button("Consultar estado", variant="secondary")
         estado_txt = gr.Textbox(label="Estado", interactive=False, lines=3)
@@ -158,10 +165,8 @@ with gr.Blocks(title="📄 PDF QA con IA", theme=gr.themes.Soft()) as demo:
 
     gr.Markdown("---")
 
-    # ── Tabs de carga ──────────────────────────────────
     with gr.Tabs():
 
-        # TAB 1: Subir archivo directamente
         with gr.Tab("📂 Subir archivo"):
             gr.Markdown("Selecciona un archivo **PDF**, **TXT** o **MD** desde tu equipo.")
             archivo_input = gr.File(
@@ -172,7 +177,6 @@ with gr.Blocks(title="📄 PDF QA con IA", theme=gr.themes.Soft()) as demo:
             estado_subida = gr.Textbox(label="Resultado", interactive=False, lines=5)
             btn_subir.click(subir_pdf, inputs=archivo_input, outputs=estado_subida)
 
-        # TAB 2: Buscar en carpeta del servidor
         with gr.Tab("🗂️ Buscar en carpeta"):
             gr.Markdown(
                 """
@@ -216,7 +220,6 @@ with gr.Blocks(title="📄 PDF QA con IA", theme=gr.themes.Soft()) as demo:
 
     gr.Markdown("---")
 
-    # ── Sección de preguntas ───────────────────────────
     gr.Markdown("## 💬 Haz preguntas sobre el documento cargado")
     with gr.Row():
         pregunta_input = gr.Textbox(
