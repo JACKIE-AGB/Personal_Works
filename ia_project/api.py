@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuración del modelo
+# Configuración del modelo principal
 MODEL_ID = "microsoft/Phi-3.5-mini-instruct"
 
 # Detectar dispositivo
@@ -29,105 +29,79 @@ phi_pipe = None
 MODEL_LOADED = False
 
 def load_model():
-    """Carga el modelo con versión compatible"""
+    """Carga el modelo principal optimizado para evitar colapsos de memoria"""
     global tokenizer, model, phi_pipe, MODEL_LOADED
     
     try:
         logger.info("=" * 50)
-        logger.info("INICIANDO CARGA DEL MODELO")
+        logger.info("INICIANDO CARGA DEL MODELO PRINCIPAL")
         logger.info("=" * 50)
         
-        # Importar transformers con manejo específico
-        from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, BitsAndBytesConfig
+        from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
         
         logger.info(f"1. Cargando tokenizer para {MODEL_ID}...")
         tokenizer = AutoTokenizer.from_pretrained(
             MODEL_ID,
             trust_remote_code=True,
-            use_fast=True,
-            padding_side="left"
+            use_fast=True
         )
-        logger.info("✅ Tokenizer cargado correctamente")
         
-        # Configurar token de padding
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-            logger.info("Token de padding configurado")
         
-        logger.info("2. Cargando modelo...")
-        logger.info("Esto puede tomar varios minutos la primera vez...")
+        logger.info("2. Cargando modelo (usando bfloat16 para ahorrar un 50% de RAM)...")
+        # Usamos bfloat16 o float16 en lugar de float32 para evitar OOM (Out of Memory)
+        dtype = torch.bfloat16 if device == "cpu" else torch.float16
         
-        # Configuración para CPU (evitar flash-attn que causa problemas)
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_ID,
-            torch_dtype=torch.float32,
-            device_map="cpu",
+            torch_dtype=dtype,
             trust_remote_code=True,
             low_cpu_mem_usage=True,
-            use_cache=True,
-            attn_implementation="eager"  # IMPORTANTE: evita flash-attention
-        )
-        logger.info("✅ Modelo cargado correctamente")
+            attn_implementation="eager"
+        ).to(device)
+        logger.info("✅ Modelo cargado correctamente en memoria")
         
         logger.info("3. Creando pipeline de generación...")
+        # Eliminamos device=-1 porque el modelo ya fue movido con .to(device)
         phi_pipe = pipeline(
             "text-generation",
             model=model,
-            tokenizer=tokenizer,
-            device=-1,  # CPU
-            torch_dtype=torch.float32,
-            model_kwargs={"attn_implementation": "eager"}
+            tokenizer=tokenizer
         )
         logger.info("✅ Pipeline creado correctamente")
         
         MODEL_LOADED = True
         logger.info("=" * 50)
-        logger.info("🎉 MODELO CARGADO EXITOSAMENTE")
+        logger.info("🎉 MODELO PRINCIPAL CARGADO EXITOSAMENTE")
         logger.info("=" * 50)
         return True
         
-    except ImportError as e:
-        logger.error(f"❌ Error de importación: {e}")
-        logger.error("Versiones recomendadas:")
-        logger.error("pip install transformers==4.40.0 torch==2.2.0 accelerate==0.28.0")
-        return False
     except Exception as e:
-        logger.error(f"❌ ERROR AL CARGAR EL MODELO: {e}")
-        logger.error(f"Tipo de error: {type(e).__name__}")
+        logger.error(f"❌ ERROR AL CARGAR EL MODELO PRINCIPAL: {e}")
         return False
 
-# Intentar cargar el modelo
+# Intentar cargar el modelo principal
 MODEL_LOADED = load_model()
 
-# Si falló, intentar con modelo alternativo
+# Si falló, intentar con un modelo alternativo VERDADERAMENTE pequeño (0.5B params)
 if not MODEL_LOADED:
-    logger.warning("Intentando con modelo alternativo más pequeño...")
+    logger.warning("Intentando con modelo alternativo ultraligero (Qwen2.5-0.5B)...")
     try:
-        MODEL_ID_ALT = "microsoft/Phi-3-mini-4k-instruct"
+        MODEL_ID_ALT = "Qwen/Qwen2.5-0.5B-Instruct"
         from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
         
-        tokenizer = AutoTokenizer.from_pretrained(
-            MODEL_ID_ALT,
-            trust_remote_code=True
-        )
-        
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID_ALT)
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_ID_ALT,
-            torch_dtype=torch.float32,
-            device_map="cpu",
-            trust_remote_code=True,
-            attn_implementation="eager"
-        )
+            torch_dtype=torch.float32 if device == "cpu" else torch.float16,
+            low_cpu_mem_usage=True
+        ).to(device)
         
-        phi_pipe = pipeline(
-            "text-generation",
-            model=model,
-            tokenizer=tokenizer,
-            device=-1
-        )
+        phi_pipe = pipeline("text-generation", model=model, tokenizer=tokenizer)
         
         MODEL_LOADED = True
-        logger.info("✅ Modelo alternativo cargado correctamente")
+        logger.info("✅ Modelo alternativo (Qwen) cargado correctamente")
     except Exception as e:
         logger.error(f"❌ También falló el modelo alternativo: {e}")
 
@@ -138,7 +112,6 @@ app = FastAPI(
     description="API para hacer preguntas sobre documentos PDF"
 )
 
-# Configurar CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -147,11 +120,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Estado global
 contexto_pdf = ""
 archivo_actual = ""
 
-# Modelos Pydantic
 class PreguntaRequest(BaseModel):
     pregunta: str
     max_tokens: Optional[int] = 512
@@ -159,9 +130,7 @@ class PreguntaRequest(BaseModel):
 class CargarArchivoRequest(BaseModel):
     ruta_completa: str
 
-# Funciones utilitarias
 def extraer_texto_pdf(file_bytes: bytes) -> str:
-    """Extrae texto de un archivo PDF"""
     try:
         texto = ""
         with fitz.open(stream=file_bytes, filetype="pdf") as doc:
@@ -169,152 +138,94 @@ def extraer_texto_pdf(file_bytes: bytes) -> str:
                 texto += pagina.get_text()
         return texto.strip()
     except Exception as e:
-        logger.error(f"Error al extraer texto del PDF: {e}")
+        logger.error(f"Error al extraer texto: {e}")
         raise HTTPException(status_code=500, detail=f"Error al procesar PDF: {str(e)}")
 
 def generar_respuesta(pregunta: str, contexto: str, max_tokens: int = 512) -> str:
-    """Genera respuesta usando el modelo"""
     if not MODEL_LOADED:
-        return "⚠️ El modelo no está disponible. Por favor, revisa los logs del servidor."
+        return "⚠️ El modelo no está disponible. Revisa los logs de la terminal para ver el error exacto de memoria o dependencias."
     
     try:
-        # Limitar contexto
         contexto_limitado = contexto[:3000]
         
-        # Mensaje en el formato que espera Phi-3
         messages = [
-            {"role": "user", "content": f"Context: {contexto_limitado}\n\nQuestion: {pregunta}\n\nAnswer:"}
+            {"role": "user", "content": f"Basado en el siguiente documento, responde la pregunta de forma concisa.\n\nDocumento:\n{contexto_limitado}\n\nPregunta:\n{pregunta}"}
         ]
         
-        # Generar respuesta
         outputs = phi_pipe(
             messages,
             max_new_tokens=min(max_tokens, 512),
             temperature=0.3,
-            do_sample=True,
-            pad_token_id=tokenizer.pad_token_id if tokenizer else None,
-            eos_token_id=tokenizer.eos_token_id if tokenizer else None
+            do_sample=True
         )
         
-        respuesta = outputs[0]["generated_text"].strip()
+        respuesta_bruta = outputs[0]["generated_text"]
         
-        # Limpiar la respuesta
-        if isinstance(respuesta, str):
-            # Eliminar el prompt de la respuesta
-            respuesta = respuesta.split("Answer:")[-1].strip() if "Answer:" in respuesta else respuesta
-        
-        return respuesta if respuesta else "No se pudo generar una respuesta."
+        # Manejo correcto de la salida: en transformers nuevos devuelve una lista de mensajes
+        if isinstance(respuesta_bruta, list):
+            # Extraer solo el contenido del último mensaje (la respuesta del asistente)
+            respuesta = respuesta_bruta[-1].get("content", "").strip()
+        else:
+            respuesta = str(respuesta_bruta)
+            # Limpieza en caso de que devuelva el texto plano
+            if "Pregunta:" in respuesta:
+                respuesta = respuesta.split("Pregunta:")[-1].split("\n", 1)[-1].strip()
+                
+        return respuesta if respuesta else "No se pudo generar una respuesta coherente."
         
     except Exception as e:
-        logger.error(f"Error al generar respuesta: {e}")
+        logger.error(f"Error en inferencia: {e}")
         return f"Error al procesar la pregunta: {str(e)}"
 
-# Endpoints
 @app.get("/")
 def root():
-    return {
-        "status": "API activa",
-        "modelo": MODEL_ID if MODEL_LOADED else "No disponible",
-        "modelo_cargado": MODEL_LOADED,
-        "archivo_cargado": archivo_actual or "Ninguno",
-        "dispositivo": device
-    }
+    return {"status": "API activa", "modelo_cargado": MODEL_LOADED, "dispositivo": device}
 
 @app.post("/upload_pdf")
 async def upload_pdf(file: UploadFile = File(...)):
-    """Sube un archivo PDF"""
     global contexto_pdf, archivo_actual
-    
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Solo se aceptan archivos PDF")
     
-    try:
-        contenido = await file.read()
-        contexto_pdf = extraer_texto_pdf(contenido)
-        archivo_actual = file.filename
-        
-        if not contexto_pdf:
-            raise HTTPException(status_code=400, detail="No se pudo extraer texto del PDF")
-        
-        logger.info(f"Archivo cargado: {file.filename}, caracteres: {len(contexto_pdf)}")
-        
-        return {
-            "status": f"Archivo '{file.filename}' cargado correctamente",
-            "caracteres": len(contexto_pdf),
-            "preview": contexto_pdf[:300] + "..." if len(contexto_pdf) > 300 else contexto_pdf,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error al subir archivo: {e}")
-        raise HTTPException(status_code=500, detail=f"Error al procesar archivo: {str(e)}")
+    contenido = await file.read()
+    contexto_pdf = extraer_texto_pdf(contenido)
+    archivo_actual = file.filename
+    
+    return {
+        "status": f"Archivo '{file.filename}' cargado",
+        "caracteres": len(contexto_pdf),
+        "preview": contexto_pdf[:300] + "..."
+    }
 
 @app.post("/cargar_desde_ruta")
 def cargar_desde_ruta(req: CargarArchivoRequest):
-    """Carga un archivo desde una ruta local"""
     global contexto_pdf, archivo_actual
-    
     if not os.path.isfile(req.ruta_completa):
-        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {req.ruta_completa}")
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
     
-    if not req.ruta_completa.lower().endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Solo se aceptan archivos PDF")
+    with open(req.ruta_completa, "rb") as f:
+        contenido = f.read()
     
-    try:
-        with open(req.ruta_completa, "rb") as f:
-            contenido = f.read()
-        
-        contexto_pdf = extraer_texto_pdf(contenido)
-        archivo_actual = req.ruta_completa
-        
-        if not contexto_pdf:
-            raise HTTPException(status_code=400, detail="No se pudo extraer texto del PDF")
-        
-        logger.info(f"Archivo cargado desde ruta: {req.ruta_completa}, caracteres: {len(contexto_pdf)}")
-        
-        return {
-            "status": "Archivo cargado correctamente",
-            "archivo": req.ruta_completa,
-            "caracteres": len(contexto_pdf),
-            "preview": contexto_pdf[:300] + "..." if len(contexto_pdf) > 300 else contexto_pdf,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error al cargar archivo desde ruta: {e}")
-        raise HTTPException(status_code=500, detail=f"Error al leer archivo: {str(e)}")
+    contexto_pdf = extraer_texto_pdf(contenido)
+    archivo_actual = req.ruta_completa
+    
+    return {
+        "status": "Archivo cargado",
+        "caracteres": len(contexto_pdf),
+        "preview": contexto_pdf[:300] + "..."
+    }
 
 @app.post("/preguntar")
 def preguntar(req: PreguntaRequest):
-    """Hace una pregunta sobre el documento cargado"""
     if not contexto_pdf:
-        raise HTTPException(
-            status_code=400,
-            detail="No hay documento cargado. Use /upload_pdf o /cargar_desde_ruta primero."
-        )
+        raise HTTPException(status_code=400, detail="No hay documento cargado.")
     
-    respuesta = generar_respuesta(
-        pregunta=req.pregunta,
-        contexto=contexto_pdf,
-        max_tokens=req.max_tokens
-    )
-    
-    return {
-        "archivo": archivo_actual,
-        "pregunta": req.pregunta,
-        "respuesta": respuesta,
-    }
+    respuesta = generar_respuesta(req.pregunta, contexto_pdf, req.max_tokens)
+    return {"archivo": archivo_actual, "pregunta": req.pregunta, "respuesta": respuesta}
 
 @app.get("/estado")
 def estado():
-    """Devuelve info del documento actualmente cargado"""
-    return {
-        "archivo_cargado": archivo_actual or "Ninguno",
-        "caracteres_en_contexto": len(contexto_pdf),
-        "modelo": MODEL_ID if MODEL_LOADED else "No disponible",
-        "modelo_cargado": MODEL_LOADED,
-        "dispositivo": device
-    }
+    return {"archivo_cargado": archivo_actual, "caracteres": len(contexto_pdf), "modelo_cargado": MODEL_LOADED, "dispositivo": device}
 
 if __name__ == "__main__":
     import uvicorn
