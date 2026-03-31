@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import Optional
 import logging
 import warnings
+import sys
 
 # Suprimir warnings
 warnings.filterwarnings("ignore")
@@ -16,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuración del modelo
-MODEL_ID = "microsoft/Phi-3.5-mini-instruct"
+MODEL_ID = "microsoft/Phi-3-mini-4k-instruct"
 
 # Detectar dispositivo
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -29,7 +30,7 @@ phi_pipe = None
 MODEL_LOADED = False
 
 def load_model():
-    """Carga el modelo con versión compatible"""
+    """Carga el modelo con manejo de errores detallado"""
     global tokenizer, model, phi_pipe, MODEL_LOADED
     
     try:
@@ -37,15 +38,15 @@ def load_model():
         logger.info("INICIANDO CARGA DEL MODELO")
         logger.info("=" * 50)
         
-        # Importar transformers con manejo específico
-        from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, BitsAndBytesConfig
+        # Importar transformers
+        from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
         
         logger.info(f"1. Cargando tokenizer para {MODEL_ID}...")
         tokenizer = AutoTokenizer.from_pretrained(
             MODEL_ID,
             trust_remote_code=True,
             use_fast=True,
-            padding_side="left"
+            cache_dir=None  # Usar caché por defecto
         )
         logger.info("✅ Tokenizer cargado correctamente")
         
@@ -57,15 +58,14 @@ def load_model():
         logger.info("2. Cargando modelo...")
         logger.info("Esto puede tomar varios minutos la primera vez...")
         
-        # Configuración para CPU (evitar flash-attn que causa problemas)
+        # Configuración para CPU (optimizada)
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_ID,
-            torch_dtype=torch.float32,
-            device_map="cpu",
+            torch_dtype=torch.float32,  # Usar float32 para CPU
+            device_map="cpu",  # Forzar CPU
             trust_remote_code=True,
             low_cpu_mem_usage=True,
-            use_cache=True,
-            attn_implementation="eager"  # IMPORTANTE: evita flash-attention
+            use_cache=True
         )
         logger.info("✅ Modelo cargado correctamente")
         
@@ -74,9 +74,8 @@ def load_model():
             "text-generation",
             model=model,
             tokenizer=tokenizer,
-            device=-1,  # CPU
-            torch_dtype=torch.float32,
-            model_kwargs={"attn_implementation": "eager"}
+            device=0 if torch.cuda.is_available() else -1,  # -1 para CPU
+            torch_dtype=torch.float32
         )
         logger.info("✅ Pipeline creado correctamente")
         
@@ -86,50 +85,33 @@ def load_model():
         logger.info("=" * 50)
         return True
         
-    except ImportError as e:
-        logger.error(f"❌ Error de importación: {e}")
-        logger.error("Versiones recomendadas:")
-        logger.error("pip install transformers==4.40.0 torch==2.2.0 accelerate==0.28.0")
-        return False
     except Exception as e:
+        logger.error("=" * 50)
         logger.error(f"❌ ERROR AL CARGAR EL MODELO: {e}")
         logger.error(f"Tipo de error: {type(e).__name__}")
+        logger.error("=" * 50)
+        
+        # Mostrar información de diagnóstico
+        logger.info("\nDIAGNÓSTICO:")
+        logger.info(f"Python version: {sys.version}")
+        logger.info(f"PyTorch version: {torch.__version__}")
+        
+        try:
+            import transformers
+            logger.info(f"Transformers version: {transformers.__version__}")
+        except:
+            logger.info("Transformers no instalado")
+        
+        try:
+            import accelerate
+            logger.info(f"Accelerate version: {accelerate.__version__}")
+        except:
+            logger.info("Accelerate no instalado")
+        
         return False
 
 # Intentar cargar el modelo
 MODEL_LOADED = load_model()
-
-# Si falló, intentar con modelo alternativo
-if not MODEL_LOADED:
-    logger.warning("Intentando con modelo alternativo más pequeño...")
-    try:
-        MODEL_ID_ALT = "microsoft/Phi-3-mini-4k-instruct"
-        from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-        
-        tokenizer = AutoTokenizer.from_pretrained(
-            MODEL_ID_ALT,
-            trust_remote_code=True
-        )
-        
-        model = AutoModelForCausalLM.from_pretrained(
-            MODEL_ID_ALT,
-            torch_dtype=torch.float32,
-            device_map="cpu",
-            trust_remote_code=True,
-            attn_implementation="eager"
-        )
-        
-        phi_pipe = pipeline(
-            "text-generation",
-            model=model,
-            tokenizer=tokenizer,
-            device=-1
-        )
-        
-        MODEL_LOADED = True
-        logger.info("✅ Modelo alternativo cargado correctamente")
-    except Exception as e:
-        logger.error(f"❌ También falló el modelo alternativo: {e}")
 
 # Inicializar FastAPI
 app = FastAPI(
@@ -172,8 +154,8 @@ def extraer_texto_pdf(file_bytes: bytes) -> str:
         logger.error(f"Error al extraer texto del PDF: {e}")
         raise HTTPException(status_code=500, detail=f"Error al procesar PDF: {str(e)}")
 
-def generar_respuesta(pregunta: str, contexto: str, max_tokens: int = 512) -> str:
-    """Genera respuesta usando el modelo"""
+def generar_respuesta_simple(pregunta: str, contexto: str, max_tokens: int = 512) -> str:
+    """Genera respuesta usando el modelo con formato simple"""
     if not MODEL_LOADED:
         return "⚠️ El modelo no está disponible. Por favor, revisa los logs del servidor."
     
@@ -181,27 +163,38 @@ def generar_respuesta(pregunta: str, contexto: str, max_tokens: int = 512) -> st
         # Limitar contexto
         contexto_limitado = contexto[:3000]
         
-        # Mensaje en el formato que espera Phi-3
-        messages = [
-            {"role": "user", "content": f"Context: {contexto_limitado}\n\nQuestion: {pregunta}\n\nAnswer:"}
-        ]
+        # Formato más simple y directo
+        prompt = f"""Context: {contexto_limitado}
+
+Question: {pregunta}
+
+Answer based only on the context above:"""
         
         # Generar respuesta
-        outputs = phi_pipe(
-            messages,
-            max_new_tokens=min(max_tokens, 512),
-            temperature=0.3,
-            do_sample=True,
-            pad_token_id=tokenizer.pad_token_id if tokenizer else None,
-            eos_token_id=tokenizer.eos_token_id if tokenizer else None
-        )
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=4096)
         
-        respuesta = outputs[0]["generated_text"].strip()
+        # Mover inputs al mismo dispositivo que el modelo
+        inputs = {k: v.to(model.device) for k, v in inputs.items()}
         
-        # Limpiar la respuesta
-        if isinstance(respuesta, str):
-            # Eliminar el prompt de la respuesta
-            respuesta = respuesta.split("Answer:")[-1].strip() if "Answer:" in respuesta else respuesta
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=min(max_tokens, 512),
+                temperature=0.3,
+                do_sample=True,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id
+            )
+        
+        # Decodificar respuesta
+        respuesta = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        
+        # Extraer solo la respuesta (después de "Answer:")
+        if "Answer:" in respuesta:
+            respuesta = respuesta.split("Answer:")[-1].strip()
+        else:
+            # Si no encuentra el marcador, tomar lo último
+            respuesta = respuesta.replace(prompt, "").strip()
         
         return respuesta if respuesta else "No se pudo generar una respuesta."
         
@@ -214,7 +207,7 @@ def generar_respuesta(pregunta: str, contexto: str, max_tokens: int = 512) -> st
 def root():
     return {
         "status": "API activa",
-        "modelo": MODEL_ID if MODEL_LOADED else "No disponible",
+        "modelo": MODEL_ID if MODEL_LOADED else "No cargado",
         "modelo_cargado": MODEL_LOADED,
         "archivo_cargado": archivo_actual or "Ninguno",
         "dispositivo": device
@@ -293,7 +286,7 @@ def preguntar(req: PreguntaRequest):
             detail="No hay documento cargado. Use /upload_pdf o /cargar_desde_ruta primero."
         )
     
-    respuesta = generar_respuesta(
+    respuesta = generar_respuesta_simple(
         pregunta=req.pregunta,
         contexto=contexto_pdf,
         max_tokens=req.max_tokens
