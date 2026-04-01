@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuración del modelo principal
-MODEL_ID = "microsoft/Phi-3.5-mini-instruct"
+MODEL_ID = "Qwen/Qwen2.5-1.5B-Instruct"
 
 # Detectar dispositivo
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -58,7 +58,8 @@ def load_model():
             torch_dtype=dtype,
             trust_remote_code=True,
             low_cpu_mem_usage=True,
-            attn_implementation="eager"
+            device_map="auto",
+            attn_implementation="sdpa"
         ).to(device)
         logger.info("✅ Modelo cargado correctamente en memoria")
         
@@ -143,39 +144,43 @@ def extraer_texto_pdf(file_bytes: bytes) -> str:
 
 def generar_respuesta(pregunta: str, contexto: str, max_tokens: int = 512) -> str:
     if not MODEL_LOADED:
-        return "⚠️ El modelo no está disponible. Revisa los logs de la terminal para ver el error exacto de memoria o dependencias."
-    
+        return "⚠️ El modelo no está disponible."
+
     try:
         contexto_limitado = contexto[:3000]
-        
-        messages = [
-            {"role": "user", "content": f"Basado en el siguiente documento, responde la pregunta de forma concisa.\n\nDocumento:\n{contexto_limitado}\n\nPregunta:\n{pregunta}"}
-        ]
-        
+
+        prompt = f"""
+Responde de forma clara y concisa basándote en el siguiente documento:
+
+Documento:
+{contexto_limitado}
+
+Pregunta:
+{pregunta}
+
+Respuesta:
+"""
+
         outputs = phi_pipe(
-            messages,
+            prompt,
             max_new_tokens=min(max_tokens, 512),
             temperature=0.3,
             do_sample=True
         )
-        
-        respuesta_bruta = outputs[0]["generated_text"]
-        
-        # Manejo correcto de la salida: en transformers nuevos devuelve una lista de mensajes
-        if isinstance(respuesta_bruta, list):
-            # Extraer solo el contenido del último mensaje (la respuesta del asistente)
-            respuesta = respuesta_bruta[-1].get("content", "").strip()
+
+        texto = outputs[0]["generated_text"]
+
+        # Extraer solo la respuesta
+        if "Respuesta:" in texto:
+            respuesta = texto.split("Respuesta:")[-1].strip()
         else:
-            respuesta = str(respuesta_bruta)
-            # Limpieza en caso de que devuelva el texto plano
-            if "Pregunta:" in respuesta:
-                respuesta = respuesta.split("Pregunta:")[-1].split("\n", 1)[-1].strip()
-                
-        return respuesta if respuesta else "No se pudo generar una respuesta coherente."
-        
+            respuesta = texto.strip()
+
+        return respuesta
+
     except Exception as e:
         logger.error(f"Error en inferencia: {e}")
-        return f"Error al procesar la pregunta: {str(e)}"
+        return f"Error: {str(e)}"
 
 @app.get("/")
 def root():
@@ -225,7 +230,13 @@ def preguntar(req: PreguntaRequest):
 
 @app.get("/estado")
 def estado():
-    return {"archivo_cargado": archivo_actual, "caracteres": len(contexto_pdf), "modelo_cargado": MODEL_LOADED, "dispositivo": device}
+    return {
+        "modelo": MODEL_ID,
+        "archivo_cargado": archivo_actual if archivo_actual else "Ninguno",
+        "caracteres_en_contexto": len(contexto_pdf),
+        "modelo_cargado": MODEL_LOADED,
+        "dispositivo": device
+    }
 
 if __name__ == "__main__":
     import uvicorn
