@@ -185,10 +185,6 @@ def extraer_pdf_completo(doc_bytes: bytes) -> dict:
     }
 
 
-# ─────────────────────────────────────────────
-# GESTIÓN DE CONTEXTO — ventana inteligente
-# ─────────────────────────────────────────────
-
 MAX_CONTEXT_CHARS = 12_000   # ~3000 tokens de contexto de documento
 
 def preparar_contexto(texto: str, pregunta: str) -> str:
@@ -224,10 +220,6 @@ def preparar_contexto(texto: str, pregunta: str) -> str:
 
     return "...(fragmentos más relevantes)...\n\n" + "\n\n".join(resultado)
 
-
-# ─────────────────────────────────────────────
-# ENDPOINTS
-# ─────────────────────────────────────────────
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):

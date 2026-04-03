@@ -155,10 +155,6 @@ def limpiar_documento():
     return verificar_backend()
 
 
-# ─────────────────────────────────────────────
-# INTERFAZ GRADIO
-# ─────────────────────────────────────────────
-
 tema = gr.themes.Soft(
     primary_hue="slate",
     secondary_hue="blue",
