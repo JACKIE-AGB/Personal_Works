@@ -17,12 +17,6 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Chatbot PDF Backend")
 
-# ─────────────────────────────────────────────
-# CONFIGURACIÓN DEL MODELO
-# Qwen2.5-7B-Instruct: más potente que 3B, misma familia,
-# compatibilidad total con transformers >= 4.37 y Python 3.9+
-# Si tu GPU tiene < 8 GB de VRAM, usa "Qwen/Qwen2.5-3B-Instruct"
-# ─────────────────────────────────────────────
 MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"   # ← cambia a 3B si tienes poca VRAM
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, tokenizer = None, None

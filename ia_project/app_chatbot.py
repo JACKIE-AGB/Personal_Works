@@ -20,10 +20,6 @@ def verificar_backend() -> str:
         return "❌ Backend no disponible — ¿está corriendo api_conversacional.py?"
 
 
-# ─────────────────────────────────────────────
-# FUNCIÓN PRINCIPAL
-# ─────────────────────────────────────────────
-
 def responder(message, history):
     """
     Generador compatible con Gradio 4.x multimodal.
