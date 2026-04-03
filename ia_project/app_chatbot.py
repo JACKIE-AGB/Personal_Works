@@ -4,10 +4,6 @@ import requests
 API_URL = "http://localhost:8000"
 
 
-# ─────────────────────────────────────────────
-# ESTADO DE CONEXIÓN
-# ─────────────────────────────────────────────
-
 def verificar_backend() -> str:
     try:
         r = requests.get(f"{API_URL}/status", timeout=5)

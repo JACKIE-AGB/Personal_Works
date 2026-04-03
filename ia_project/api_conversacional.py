@@ -46,10 +46,6 @@ def cargar_modelo():
 
 cargar_modelo()
 
-
-# ─────────────────────────────────────────────
-# MODELOS PYDANTIC
-# ─────────────────────────────────────────────
 class Mensaje(BaseModel):
     role: str
     content: str
@@ -59,10 +55,6 @@ class ChatRequest(BaseModel):
     messages: List[Mensaje]
     max_tokens: int = 512
 
-
-# ─────────────────────────────────────────────
-# EXTRACCIÓN DE PDF — núcleo del sistema
-# ─────────────────────────────────────────────
 
 def _limpiar_texto(texto: str) -> str:
     """Limpia artefactos comunes de extracción PDF."""
