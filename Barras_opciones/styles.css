@@ -1,18 +1,24 @@
 body {
   margin: 0;
   padding: 0;
-} 
+  padding-top: 50px;
+}
 
 h2, p {
-  margin: 10px
+  margin: 10px;
 }
 
 .original-nav {
   list-style-type: none;
   margin: 0;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   background-color: #38444d;
+
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 1000;
 }
 
 .original-nav li {
@@ -22,12 +28,12 @@ h2, p {
 .original-nav li a, .original-nav .dropbtn {
   display: inline-block;
   color: white;
-  text-align: center;
+  text-align: left;
   padding: 14px 16px;
   text-decoration: none;
 }
 
-.original-nav li a:hover, .original-nav .dropdown:hover .dropbtn {
+.original-nav li a:hover, original-nav .dropdown:hover .dropbtn {
   background-color: red;
 }
 
@@ -68,7 +74,7 @@ h2, p {
   }
 
   .original-nav li a,
-  .original-nav .dropbtn {
+  .original-nav dropbtn {
     display: block;
     width: 100%;
     text-align: left;
@@ -80,7 +86,7 @@ h2, p {
     width: 100%;
   }
 
-  .original-nav .dropdown-content{
+  .original-nav .dropdown-content {
     position: static;
     width: 100%;
     box-shadow: none;
@@ -93,6 +99,7 @@ h2, p {
 
   body {
     font-size: 16px;
+    padding-top: 120px;
   }
 
   h2, p {
