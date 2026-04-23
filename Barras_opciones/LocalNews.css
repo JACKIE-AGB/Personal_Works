@@ -1,14 +1,24 @@
 body {
   margin: 0;
+  padding: 0;
+  padding-top: 50px;
   font-family: Arial, sans-serif;
 }
 
+h1, p {
+  margin: 15px 20px;
+}
+
 .navbar {
-  background-color: #3f4a52;
+  background-color: #38444d;
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 1000;
 }
 
 .menu {
-  list-style: none;
+  list-style-type: none;
   margin: 0;
   padding: 0;
   display: flex;
@@ -19,14 +29,15 @@ body {
 }
 
 .menu li a {
-  display: block;
-  padding: 15px 20px;
+  display: inline-block;
   color: white;
+  text-align: left;
+  padding: 14px 16px;
   text-decoration: none;
 }
 
-.menu li a:hover {
-  background-color: #2f373d;
+.menu li a:hover, .dropdown:hover > a {
+  background-color: red;
 }
 
 .menu li a.active {
@@ -36,22 +47,22 @@ body {
 .submenu {
   display: none;
   position: absolute;
-  top: 100%;
-  left: 0;
-  background-color: #d9d9d9;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  min-width: 180px;
+  background-color: #f9f9f9;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
 }
 
-submenu li a {
+.submenu a {
   color: black;
-  padding: 12px 15px;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+  text-align: left;
 }
 
-.submenu li a:hover {
-  background-color: #c0c0c0;
+.submenu a:hover {
+  background-color: #ffc2c2;
 }
 
 .dropdown:hover .submenu {
@@ -60,4 +71,25 @@ submenu li a {
 
 .content {
   padding: 20px;
+}
+
+@media screen and (max-width: 600px) {
+  .menu {
+    flex-direction: column;
+  }
+
+  .menu li, .menu li a {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .submenu {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+  }
+
+  body {
+    padding-top: 180px;
+  }
 }
