@@ -2,33 +2,30 @@ body {
   margin: 0;
   padding: 0;
   padding-top: 50px;
-  font-family: Arial, sans-serif;
 }
 
-h1, p {
-  margin: 15px 20px;
+h2, p {
+  margin: 10px;
 }
 
-.navbar {
+.original-nav {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
   background-color: #38444d;
+
   position: fixed;
   top: 0;
   width: 100%;
   z-index: 1000;
 }
 
-.menu {
-  list-style-type: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
+.original-nav li {
+  float: left;
 }
 
-.menu li {
-  position: relative;
-}
-
-.menu li a {
+.original-nav li a, .original-nav .dropbtn {
   display: inline-block;
   color: white;
   text-align: left;
@@ -36,15 +33,15 @@ h1, p {
   text-decoration: none;
 }
 
-.menu li a:hover, .dropdown:hover > a {
+.original-nav li a:hover, original-nav .dropdown:hover .dropbtn {
   background-color: red;
 }
 
-.menu li a.active {
-  background-color: red;
+.original-nav li.dropdown {
+  display: inline-block;
 }
 
-.submenu {
+.original-nav .dropdown-content {
   display: none;
   position: absolute;
   background-color: #f9f9f9;
@@ -53,7 +50,7 @@ h1, p {
   z-index: 1;
 }
 
-.submenu a {
+.original-nav .dropdown-content a {
   color: black;
   padding: 12px 16px;
   text-decoration: none;
@@ -61,35 +58,51 @@ h1, p {
   text-align: left;
 }
 
-.submenu a:hover {
+.original-nav .dropdown-content a:hover {
   background-color: #ffc2c2;
 }
 
-.dropdown:hover .submenu {
+.original-nav .dropdown:hover .dropdown-content {
   display: block;
 }
 
-.content {
-  padding: 20px;
-}
-
 @media screen and (max-width: 600px) {
-  .menu {
-    flex-direction: column;
+  .original-nav li {
+    float: none;
+    display: block;
+    width: 100%;
   }
 
-  .menu li, .menu li a {
+  .original-nav li a,
+  .original-nav dropbtn {
+    display: block;
     width: 100%;
+    text-align: left;
     box-sizing: border-box;
   }
 
-  .submenu {
+  .original-nav .dropdown {
+    display: block;
+    width: 100%;
+  }
+
+  .original-nav .dropdown-content {
     position: static;
     width: 100%;
     box-shadow: none;
+    background-color: #f9f9f9;
+  }
+
+  .original-nav .dropdown:hover .dropdown-content {
+    display: block;
   }
 
   body {
-    padding-top: 180px;
+    font-size: 16px;
+    padding-top: 120px;
+  }
+
+  h2, p {
+    margin: 15px;
   }
 }
