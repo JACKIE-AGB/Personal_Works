@@ -1,131 +1,40 @@
-combina estos dos códigos para crear uno donde se mantenga el responsive del primero pero a su vez añadir los desplieges del segundo
+@media de subpages
 
-body {
-  margin: 0;
-}
+  .original-nav li {
+    float: none;
+    display: block;
+    width: 100%;
+  }
 
-ul.topnav {
-  list-style-type: none;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  background-color: #333;
-}
+  .original-nav li a,
+  .original-nav dropbtn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    box-sizing: border-box;
+  }
 
-ul.topnav li {
-  float: left;
-}
+  .original-nav .dropdown {
+    display: block;
+    width: 100%;
+  }
 
-ul.topnav li a {
-  display: block;
-  color: white;
-  text-align: center;
-  padding: 14px 16px;
-  text-decoration: none;
-}
+  .original-nav .dropdown-content {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+    background-color: #f9f9f9;
+  }
 
-ul.topnav li a:hover:not(.active) {
-  background-color: #111;
-}
+  .original-nav .dropdown:hover .dropdown-content {
+    display: block;
+  }
 
-ul.topnav li a.active {
-  background-color: #04AA6D;
-}
+  body {
+    font-size: 16px;
+    padding-top: 120px;
+  }
 
-ul.topnav li.right {
-  float: right;
-}
-
-@media screen and (max-width: 600px) {
-  ul.topnav li.right,
-  ul.topnav li {float: none;}
-}
-
-Desplieges
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-body {
-  margin: 0;
-  padding: 0;
-}
-
-h2, p {
-  margin: 10px;
-}
-
-ul {
-  list-style-type: none;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  background-color: #38444d;
-}
-
-li {
-  float: left;
-}
-
-li a, .dropbtn {
-  display: inline-block;
-  color: white;
-  text-align: center;
-  padding: 14px 16px;
-  text-decoration: none;
-}
-
-li a:hover, .dropdown:hover .dropbtn {
-  background-color: red;
-}
-
-li.dropdown {
-  display: inline-block;
-}
-
-.dropdown-content {
-  display: none;
-  position: absolute;
-  background-color: #f9f9f9;
-  min-width: 160px;
-  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-  z-index: 1;
-}
-
-.dropdown-content a {
-  color: black;
-  padding: 12px 16px;
-  text-decoration: none;
-  display: block;
-  text-align: left;
-}
-
-.dropdown-content a:hover {background-color: #f1f1f1;}
-
-.dropdown:hover .dropdown-content {
-  display: block;
-}
-</style>
-</head>
-<body>
-
-<ul>
-  <li><a href="#home">Home</a></li>
-  <li><a href="#news">News</a></li>
-  <li class="dropdown">
-    <a href="javascript:void(0)" class="dropbtn">Dropdown</a>
-    <div class="dropdown-content">
-      <a href="#">Link 1</a>
-      <a href="#">Link 2</a>
-      <a href="#">Link 3</a>
-    </div>
-  </li>
-</ul>
-
-<h2>Dropdown Menu in Navbar</h2>
-<p>Hover over the "Dropdown" link to see the dropdown menu.</p>
-
-</body>
-</html>
-
-
+  h2, p {
+    margin: 15px;
+  }

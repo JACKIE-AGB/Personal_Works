@@ -67,21 +67,28 @@ h2, p {
 }
 
 @media screen and (max-width: 600px) {
+  .original-nav{
+    position: relative;
+  }
+
+  body {
+    padding-top: 0;
+  }
+
   .original-nav li {
     float: none;
     display: block;
     width: 100%;
   }
 
-  .original-nav li a,
-  .original-nav dropbtn {
+  .original-nav li a, .original-nav .dropbtn {
     display: block;
     width: 100%;
     text-align: left;
     box-sizing: border-box;
   }
 
-  .original-nav .dropdown {
+  .original-nav .dropbtn {
     display: block;
     width: 100%;
   }
@@ -89,20 +96,7 @@ h2, p {
   .original-nav .dropdown-content {
     position: static;
     width: 100%;
-    box-shadow: none;
+    box-sizing: none;
     background-color: #f9f9f9;
-  }
-
-  .original-nav .dropdown:hover .dropdown-content {
-    display: block;
-  }
-
-  body {
-    font-size: 16px;
-    padding-top: 120px;
-  }
-
-  h2, p {
-    margin: 15px;
   }
 }

@@ -33,7 +33,7 @@ h2, p {
   text-decoration: none;
 }
 
-.original-nav li a:hover, original-nav .dropdown:hover .dropbtn {
+.original-nav li a:hover, .original-nav .dropdown:hover .dropbtn {
   background-color: red;
 }
 
@@ -67,14 +67,22 @@ h2, p {
 }
 
 @media screen and (max-width: 600px) {
+  .original-nav {
+    position: relative;
+  }
+
+  body {
+    padding-top: 0;
+    font-size: 16px;
+  }
+
   .original-nav li {
     float: none;
     display: block;
     width: 100%;
   }
 
-  .original-nav li a,
-  .original-nav dropbtn {
+  .original-nav li a, original-nav .dropbtn {
     display: block;
     width: 100%;
     text-align: left;
@@ -95,11 +103,6 @@ h2, p {
 
   .original-nav .dropdown:hover .dropdown-content {
     display: block;
-  }
-
-  body {
-    font-size: 16px;
-    padding-top: 120px;
   }
 
   h2, p {
