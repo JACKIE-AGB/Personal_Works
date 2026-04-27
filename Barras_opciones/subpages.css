@@ -1,102 +1,113 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
 body {
-  margin: 0;
-  padding: 0;
-  padding-top: 50px;
+  background: #f5f7fa;
 }
 
-h2, p {
-  margin: 10px;
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 60px;
+  background: white;
 }
 
-.original-nav {
-  list-style-type: none;
-  margin: 0;
-  padding: 0;
-  overflow: visible;
-  background-color: #38444d;
-
-  position: fixed;
-  top: 0;
-  width: 100%;
-  z-index: 1000;
+.logo {
+  font-weight: bold;
+  font-size: 22px;
+  color: #2ecc71;
 }
 
-.original-nav li {
-  float: left;
-}
-
-.original-nav li a, .original-nav .dropbtn {
-  display: inline-block;
-  color: white;
-  text-align: left;
-  padding: 14px 16px;
+nav a {
+  margin: 0 15px;
   text-decoration: none;
+  color: #333;
+  font-size: 14px;
 }
 
-.original-nav li a:hover, original-nav .dropdown:hover .dropbtn {
-  background-color: red;
+.nav-buttons {
+  display: flex;
+  gap: 15px;
 }
 
-.original-nav li.dropdown {
+.login {
+  text-decoration: none;
+  color: #333;
+}
+
+.btn-primary {
+  background: #2ecc71;
+  color: white;
+  padding: 10px 18px;
+  border-radius: 20px;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.dropdown {
+  position: relative;
   display: inline-block;
 }
 
-.original-nav .dropdown-content {
+.dropdown-content {
   display: none;
   position: absolute;
-  background-color: #f9f9f9;
-  min-width: 160px;
-  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-  z-index: 1;
+  top: 30px;
+  background: white;
+  min-width: 180px;
+  border-radius: 10px;
+  box-shadow: 0px 10px 25px rgba(0,0,0,0.1);
 }
 
-.original-nav .dropdown-content a {
-  color: black;
-  padding: 12px 16px;
-  text-decoration: none;
+.dropdown-content a {
   display: block;
-  text-align: left;
+  padding: 12px;
+  color: #333;
 }
 
-.original-nav .dropdown-content a:hover {
-  background-color: #ffc2c2;
+.dropdown-content a:hover {
+  background: #f2f2f2;
 }
 
-.original-nav .dropdown:hover .dropdown-content {
+.dropdown:hover .dropdown-content {
   display: block;
 }
 
-@media screen and (max-width: 600px) {
-  .original-nav{
-    position: relative;
+.page {
+  pading: 80px 60px;
+  max-width: 900px;
+}
+
+.page h1 {
+  font-size: 36px;
+  margin-bottom: 20px;
+}
+
+.intro {
+  color: #666;
+  margin-bottom: 30px;
+}
+
+.content-box {
+  background: white;
+  padding: 30px;
+  border-radius: 10px;
+  line-height: 1.6;
+  box-shadow: 0px 10px 20px rgba(0,0,0,0.05);
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    gap: 15px;
   }
 
-  body {
-    padding-top: 0;
-  }
-
-  .original-nav li {
-    float: none;
-    display: block;
-    width: 100%;
-  }
-
-  .original-nav li a, .original-nav .dropbtn {
-    display: block;
-    width: 100%;
-    text-align: left;
-    box-sizing: border-box;
-  }
-
-  .original-nav .dropbtn {
-    display: block;
-    width: 100%;
-  }
-
-  .original-nav .dropdown-content {
-    position: static;
-    width: 100%;
-    box-sizing: none;
-    background-color: #f9f9f9;
+  .page {
+    padding: 40px 20px;
   }
 }
