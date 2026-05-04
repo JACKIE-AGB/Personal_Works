@@ -13,8 +13,9 @@ body {
 }
 
 /* NAVBAR (Adaptado de styles.css) */
-.original-nav {
-  display: flex;
+.navbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   list-style-type: none;
   padding: 20px 60px;
@@ -22,22 +23,41 @@ body {
   box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
-.original-nav li {
+.logo {
+  font-weight: bold;
+  font-size: 22px;
+  color: #333;
+  justify-self: start;
+}
+
+.navbar nav {
+  display: flex;
+  gap: 15px;
+  justify-self: center;
+}
+
+.nav-buttons {
+  display: flex;
+  gap: 15px;
+  justify-self: end;
+}
+
+.navbar li {
   display: inline-block;
 }
 
-.original-nav a, .dropbtn {
-  margin: 0 15px;
+.navbar a, .dropbtn {
   text-decoration: none;
   color: #333;
   font-size: 14px;
-  transition: color 0.3s, gap 0.3s; /* Animación de color suave */
-  display: flex;
-  align-items: center;
+  transition: color 0.3s;
+  background: none;
+  border: none;
+  cursor: pointer;
 }
 
 /* Animación de Hover: Cambio de color a verde (de styles.css) */
-.original-nav a:hover, 
+.navbar a:hover, 
 .dropdown:hover .dropbtn {
   color: #2ecc71;
 }
@@ -48,16 +68,21 @@ body {
 }
 
 .dropdown-content {
-  display: none; /* Se activa con hover */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+
   position: absolute;
-  top: 100%;
+  top: 120%;
   left: 0;
+
   background: white;
-  min-width: 180px;
+  min-width: 190px;
   border-radius: 10px;
   box-shadow: 0px 10px 25px rgba(0,0,0,0.1);
-  z-index: 100;
   overflow: hidden;
+
+  transition: all 0.25s ease;
 }
 
 .dropdown-content a {
@@ -69,7 +94,9 @@ body {
 
 /* Comportamiento del desplegable al pasar el cursor */
 .dropdown:hover .dropdown-content {
-  display: block;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .dropdown-content a:hover {
@@ -115,7 +142,7 @@ hr {
 
 /* Responsivo */
 @media (max-width: 768px) {
-  .original-nav {
+  .navbar {
     padding: 20px;
     flex-direction: column;
   }

@@ -3,55 +3,77 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<link rel="stylesheet" href="subpages.css">
+	<link rel="stylesheet" type="text/css" href="subpages.css">
 	<title>National News</title>
 </head>
 <body>
 
-<!-- NAVBAR (SE MANTIENE IGUAL) -->
-<ul class="original-nav">
-	<li><a href="index.html">Home</a></li>
-	<li class="dropdown">
-		<a href="javascript:void(0)" class="dropbtn">News</a>
-		<div class="dropdown-content">
-			<a href="LocalNews.html">Local News</a>
-			<a href="NationalNews.html">National News</a>
-			<a href="InternationalNews.html">International News</a>
+<header class="navbar">
+	<div class="logo">CEIE</div>
+
+	<nav>
+		<a href="index.html">Home</a>
+
+		<div class="dropdown">
+			<a href="#" class="dropbtn">News ▾</a>
+			<div class="dropdown-content">
+				<a href="LocalNews.html">Local News</a>
+				<a href="NationalNews.html">National News</a>
+				<a href="InternationalNews.html">International News</a>
+			</div>
 		</div>
-	</li>
-	<li><a href="Contact.html">Contact</a></li>
-	<li><a href="About.html">About</a></li>
-</ul>
 
-<!-- CONTENIDO NUEVO -->
-<div class="subpages-body">
+		<a href="Contact.html">Contact</a>
+		<a href="About.html">About</a>
+	</nav>
 
-  <h2>Noticias Nacionales</h2>
+	<div class="nav-buttons">
+		<a href="#" class="login">Log in</a>
+		<a href="#" class="btn-primary">Subscribe</a>
+	</div>
+</header>
 
-  <p>Mantente siempre actualizado dentro de nuestra pagina web, dentro de nuestro pais Mexico</p>
+<main class="content-container">
+	
+	<section class="page-header">
+		<h1>Noticias <span>Nacionales</span></h1>
+		<p>Mantente siempre actualizado dentro de nuestro país Mexico</p>
+	</section>
 
-  <hr>
+	<hr class="separator">
 
-  <h3>Nuevas Medidas Implementadas</h3>
-  <p>El gobierno federal anunció hoy la implementación de nuevas medidas para fortalecer la infraestructura en diversas regiones del país.</p>
+	<article class="news-item">
+		<h3>📰 Nuevas Medidas Implementadas</h3>
+		<p>El gobierno federal anunció hoy la implementación de nuevas medidas para fortalecer la infraestructura en diversas regiones del país.</p>
+	</article>
 
-  <h3>Nuevo material economico</h3>
-  <p>Expertos en economía señalan que los índices de estabilidad financiera muestran un crecimiento sostenido durante el primer trimestre del año.</p>
+	<article>
+		<h3>💰 Nuevo material económico</h3>
+    <p>Expertos en economía señalan que los índices de estabilidad financiera muestran un crecimiento sostenido durante el primer trimestre del año.</p>
+	</article>
 
-  <h3>Avances tecnologcos</h3>
-  <p>Diversas organizaciones civiles se han reunido en la capital para discutir los avances en los programas de desarrollo social y bienestar comunitario.</p>
+	<article class="news-item">
+    <h3>💻 Avances tecnológicos</h3>
+    <p>Diversas organizaciones civiles se han reunido en la capital para discutir los avances en los programas de desarrollo social y bienestar comunitario.</p>
+  </article>
 
-  <h3>Prevenciones</h3>
-  <p>Las autoridades locales han comunicado una serie de recomendaciones preventivas ante las condiciones meteorológicas pronosticadas para esta semana.</p>
+   <article class="news-item">
+    <h3>⚠️ Prevenciones</h3>
+    <p>Las autoridades locales han comunicado una serie de recomendaciones preventivas ante las condiciones meteorológicas pronosticadas para esta semana.</p>
+  </article>
 
-  <h3>Nuevo metodo de movilidad</h3>
-  <p>Se espera que en los próximos días se inauguren importantes proyectos de movilidad urbana que beneficiarán a miles de ciudadanos en la zona metropolitana.</p>
+  <article class="news-item">
+    <h3>🚆 Nuevo método de movilidad</h3>
+    <p>Se espera que en los próximos días se inauguren importantes proyectos de movilidad urbana que beneficiarán a miles de ciudadanos en la zona metropolitana.</p>
+  </article>
 
-  <hr>
+  <hr class="separator">
 
-  <p>Check back regularly for more updates on local events, developments, and stories that matter to you.</p>
-
-</div>
+  <div class="generic-text">
+  	<p>Check back regularly for more updates on national events, developments, and stories that matter to you.</p>
+  </div>
+  
+</main>
 
 </body>
 </html>

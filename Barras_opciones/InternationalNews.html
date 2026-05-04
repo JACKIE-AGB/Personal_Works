@@ -3,55 +3,77 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<link rel="stylesheet" href="subpages.css">
-	<title>National News</title>
+	<link rel="stylesheet" type="text/css" href="subpages.css">
+	<title>International News</title>
 </head>
 <body>
 
-<!-- NAVBAR (SE MANTIENE IGUAL) -->
-<ul class="original-nav">
-	<li><a href="index.html">Home</a></li>
-	<li class="dropdown">
-		<a href="javascript:void(0)" class="dropbtn">News</a>
-		<div class="dropdown-content">
-			<a href="LocalNews.html">Local News</a>
-			<a href="NationalNews.html">National News</a>
-			<a href="InternationalNews.html">International News</a>
+<header class="navbar">
+	<div class="logo">CEIE</div>
+
+	<nav>
+		<a href="index.html">Home</a>
+
+		<div class="dropdown">
+			<a href="#" class="dropbtn">News ▾</a>
+			<div class="dropdown-content">
+				<a href="LocalNews.html">Local News</a>
+				<a href="NationalNews.html">National News</a>
+				<a href="InternationalNews.html">International News</a>
+			</div>
 		</div>
-	</li>
-	<li><a href="Contact.html">Contact</a></li>
-	<li><a href="About.html">About</a></li>
-</ul>
 
-<!-- CONTENIDO NUEVO -->
-<div style="padding:0 16px;">
+		<a href="Contact.html">Contact</a>
+		<a href="About.html">About</a>
+	</nav>
 
-  <h2>Noticias Internacionales</h2>
+	<div class="nav-buttons">
+		<a href="#" class="login">Log in</a>
+		<a href="#" class="btn-primary">Subscribe</a>
+	</div>
+</header>
 
-  <p>Mantente informado sobre las ultimas noticias de caracter internacional, que afecten tanto paises extranjeros como a nuestro pais</p>
+<main class="content-container">
+	
+	<section class="page-header">
+		<h1>Noticias <span>Internationales</span></h1>
+		<p>Mantente informado sobre las ultimas noticias de caracter internacional</p>
+	</section>
 
-  <hr>
+	<hr class="separator">
 
-  <h3>Naciones Unidas</h3>
-  <p>Representantes de diversas naciones se reunieron esta mañana en Ginebra para establecer acuerdos clave sobre la cooperación diplomática y la seguridad global.</p>
+ <article class="news-item">
+    <h3>🌐 Naciones Unidas</h3>
+    <p>Representantes de diversas naciones se reunieron en Ginebra para establecer acuerdos clave sobre cooperación diplomática y seguridad global.</p>
+  </article>
 
-  <h3>Jornadas Volatiles</h3>
-  <p>Los principales mercados bursátiles internacionales registraron una jornada de volatilidad tras el reciente informe sobre las perspectivas de crecimiento económico mundial.</p>
+  <article class="news-item">
+    <h3>📉 Jornadas volátiles</h3>
+    <p>Los principales mercados bursátiles registraron volatilidad tras nuevos informes sobre el crecimiento económico mundial.</p>
+  </article>
 
-  <h3>Alertas</h3>
-  <p>Organismos internacionales han emitido una alerta urgente sobre la necesidad de coordinar esfuerzos conjuntos para mitigar los efectos del cambio climático en regiones vulnerables.</p>
+  <article class="news-item">
+    <h3>⚠️ Alertas climáticas</h3>
+    <p>Organismos internacionales han emitido alertas sobre la necesidad de coordinar esfuerzos para mitigar el cambio climático.</p>
+  </article>
 
-  <h3>Ivestigaciones cientificas</h3>
-  <p>Equipos de investigación científica de varios países anunciaron un avance histórico en la exploración espacial, consolidando meses de colaboración técnica internacional.</p>
+  <article class="news-item">
+    <h3>🚀 Investigaciones científicas</h3>
+    <p>Equipos internacionales anunciaron un avance histórico en la exploración espacial tras meses de colaboración.</p>
+  </article>
 
-  <h3>Agencias humanitarias</h3>
-  <p>Diversas agencias de ayuda humanitaria coordinan un plan de respuesta inmediata para asistir a las zonas afectadas por el reciente desastre natural en el sudeste asiático.</p>
+  <article class="news-item">
+    <h3>🤝 Ayuda humanitaria</h3>
+    <p>Agencias internacionales coordinan respuesta inmediata ante desastres naturales en el sudeste asiático.</p>
+  </article>
 
-  <hr>
+  <hr class="separator">
 
-  <p>Check back regularly for more updates on local events, developments, and stories that matter to you.</p>
-
-</div>
+  <div class="generic-text">
+  	<p>Check back regularly for more updates on international events and global developments.</p>
+  </div>
+  
+</main>
 
 </body>
 </html>
