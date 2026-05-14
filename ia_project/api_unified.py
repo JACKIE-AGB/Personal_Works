@@ -110,9 +110,11 @@ async def index_folder(folder_path: str = Form(...)):
         folder_vectorstore = FAISS.from_documents(docs, embeddings)
         folder_vectorstore.save_local(FAISS_INDEX_PATH)
 
+        # Contar archivos únicos (raw_documents tiene una entrada por PÁGINA, no por archivo)
+        unique_files = list(set([os.path.basename(d.metadata['source']) for d in raw_documents]))
         return {
-            "message": f"Indexación completa: {len(raw_documents)} archivos.",
-            "files": [os.path.basename(d.metadata['source']) for d in raw_documents]
+            "message": f"Indexación completa: {len(unique_files)} archivos.",
+            "files": unique_files
         }
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
