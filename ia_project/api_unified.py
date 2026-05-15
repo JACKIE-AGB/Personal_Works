@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain.chains import RetrievalQA
+from langchain_classic.chains import RetrievalQA
 from langchain_community.document_loaders import PyPDFLoader, UnstructuredPDFLoader
 from langchain_core.prompts import PromptTemplate
 from langchain_groq import ChatGroq
