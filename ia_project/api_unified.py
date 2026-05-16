@@ -12,7 +12,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 import tempfile
 import os
 import shutil
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF para procesamiento veloz de texto y gráficos
 import base64
 from dotenv import load_dotenv
 
@@ -34,33 +34,34 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise ValueError("⛔ GROQ_API_KEY no encontrada. Agrégala a tu archivo .env")
 
-# Modelos configurados
-VISION_MODEL = "llama-3.2-90b-vision-preview"
+# Modelos estables de producción (Actualizados)
+VISION_MODEL = "llama-3.2-90b-vision-instruct" 
 TEXT_MODEL_FOLDER = "openai/gpt-oss-120b"
 TEXT_MODEL_PDF = "llama-3.3-70b-versatile"
 
-# Embeddings multilingües
+# Embeddings multilingües para documentación técnica en español
 embeddings = HuggingFaceEmbeddings(
     model_name="intfloat/multilingual-e5-large",
     encode_kwargs={"normalize_embeddings": True}
 )
 FAISS_INDEX_PATH = "faiss_saved_index"
 
-# Estados de los índices
+# Estados globales de los índices vectoriales
 pdf_vectorstore = None
 folder_vectorstore = None
 
-# Inicializar modelo de visión
+# Inicializar modelo de visión de producción
 vision_llm = ChatGroq(model=VISION_MODEL, api_key=GROQ_API_KEY, temperature=0.0)
 
 
 # ============================================
-# PIPELINE DE PROCESAMIENTO VISUAL Y TEXTUAL
+# PIPELINE DE EXTRACCIÓN MULTIMODAL (TEXTO + PLANOS)
 # ============================================
 def extract_pdf_content_with_vision(file_path: str) -> list[Document]:
     """
-    Lee un PDF página por página. Si detecta imágenes o planos, utiliza el modelo
-    de visión de Groq para describir el contenido visual y añadirlo al índice.
+    Procesa un PDF página por página. Si detecta planos, diagramas o imágenes,
+    los convierte temporalmente en formato visual y usa la IA de visión de Groq
+    para generar una descripción técnica hiperdetallada integrable en FAISS.
     """
     documents = []
     file_name = os.path.basename(file_path)
@@ -71,25 +72,25 @@ def extract_pdf_content_with_vision(file_path: str) -> list[Document]:
             text = page.get_text()
             has_images = len(page.get_images()) > 0
             
-            # Construcción del bloque de contenido básico
+            # Formatear el contenido base textual
             page_content = f"ARCHIVO: {file_name}\nPÁGINA: {page_num + 1}\n"
             if text.strip():
-                page_content += f"TEXTO EXTRAÍDO:\n{text}\n"
+                page_content += f"CONTENIDO TEXTUAL:\n{text}\n"
             
-            # Criterio: Si tiene imágenes o el texto es muy corto (posible plano o escaneo)
+            # Criterio: Si la página contiene imágenes o tiene muy poco texto (ej. planos de ingeniería)
             if has_images or len(text.strip()) < 150:
                 try:
-                    # Renderizar página a imagen de alta definición (DPI 150 para planos)
+                    # Renderizar la página como imagen PNG a alta definición (150 DPI para planos legibles)
                     pix = page.get_pixmap(dpi=150)
                     img_bytes = pix.tobytes("png")
                     encoded_image = base64.b64encode(img_bytes).decode("utf-8")
                     
-                    # Crear el mensaje multimodal para Groq
+                    # Prompt de ingeniería especializado para CFE
                     prompt_vision = (
-                        "Eres un ingeniero experto de la CFE. Analiza detalladamente esta imagen, plano o diagrama "
-                        "técnico perteneciente a la planta. Describe meticulosamente la distribución, componentes eléctricos, "
-                        "conexiones, tuberías, diagramas de flujo, etiquetas, tablas de datos y cualquier nomenclatura visible. "
-                        "Tu descripción debe ser exhaustiva para que pueda ser buscada con precisión mediante texto."
+                        "Eres un ingeniero especialista de la CFE. Analiza minuciosamente este plano técnico, "
+                        "diagrama de flujo, mapa o documento escaneado de la central hidroeléctrica. "
+                        "Describe detalladamente la distribución de equipos, tuberías, conexiones eléctricas, "
+                        "valores numéricos, nomenclaturas, leyendas y cualquier dato crítico para que sea indexable textualmente."
                     )
                     
                     message = HumanMessage(
@@ -102,14 +103,14 @@ def extract_pdf_content_with_vision(file_path: str) -> list[Document]:
                         ]
                     )
                     
-                    # Invocar el modelo de visión
+                    # Llamada al modelo de visión estable
                     response = vision_llm.invoke([message])
-                    page_content += f"\n[ANÁLISIS VISUAL DEL PLANO/DIAGRAMA]:\n{response.content}\n"
+                    page_content += f"\n[DESCRIPCIÓN DE PLANO E IMAGEN TÉCNICA]:\n{response.content}\n"
                     
                 except Exception as ve:
-                    print(f"⚠️ No se pudo procesar la visión en {file_name} (Pág. {page_num + 1}): {ve}")
+                    print(f"⚠️ Error de procesamiento visual en {file_name} (Pág. {page_num + 1}): {ve}")
             
-            # Crear documento estructurado para LangChain
+            # Encapsular en un objeto Document de LangChain
             documents.append(Document(
                 page_content=page_content,
                 metadata={"source": file_path, "page": page_num + 1}
@@ -128,9 +129,9 @@ if os.path.exists(FAISS_INDEX_PATH):
             embeddings,
             allow_dangerous_deserialization=True
         )
-        print("✅ Índice de carpetas persistente cargado.")
+        print("✅ Índice de carpetas persistente cargado con éxito.")
     except Exception as e:
-        print(f"⚠️ Error al cargar índice: {e}")
+        print(f"⚠️ Error al inicializar índice local: {e}")
 
 
 # ============================================
@@ -144,15 +145,15 @@ async def upload_pdf(file: UploadFile = File(...)):
             tmp.write(await file.read())
             temp_path = tmp.name
 
-        # Procesamiento avanzado con visión incorporada
+        # Ejecutar pipeline de visión sobre el archivo temporal
         raw_documents = extract_pdf_content_with_vision(temp_path)
         
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1800, chunk_overlap=300)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=250)
         docs = splitter.split_documents(raw_documents)
         
         pdf_vectorstore = FAISS.from_documents(docs, embeddings)
         os.unlink(temp_path)
-        return {"message": "PDF con análisis visual procesado correctamente"}
+        return {"message": "PDF e imágenes del documento analizados e indexados correctamente."}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -162,11 +163,11 @@ async def ask_pdf(question: str = Form(...), style: str = Form("normal")):
     if pdf_vectorstore is None:
         return {"answer": "❌ Sube un PDF primero."}
 
-    prompt_style = "Responde de forma profesional basándote en la información y análisis visual provistos."
+    prompt_style = "Responde de forma profesional basándote en el texto y planos analizados."
     if style == "amable":
-        prompt_style = "Responde de manera amable, servicial y técnica."
+        prompt_style = "Responde de manera amable y altamente detallada."
     elif style == "agresivo":
-        prompt_style = "Responde de forma directa, corta y técnica."
+        prompt_style = "Responde de forma directa, técnica y concisa."
 
     qa_chain = RetrievalQA.from_chain_type(
         llm=ChatGroq(model=TEXT_MODEL_PDF, api_key=GROQ_API_KEY, temperature=0.3),
@@ -177,30 +178,29 @@ async def ask_pdf(question: str = Form(...), style: str = Form("normal")):
 
 
 # ============================================
-# ENDPOINTS CARPETAS
+# ENDPOINTS CARPETAS MASIVAS
 # ============================================
 @app.post("/index_folder/")
 async def index_folder(folder_path: str = Form(...)):
     global folder_vectorstore
     if not os.path.exists(folder_path):
-        return JSONResponse(status_code=400, content={"error": "Ruta no encontrada"})
+        return JSONResponse(status_code=400, content={"error": "La ruta especificada no existe en el servidor."})
 
     try:
         all_documents = []
-        # Caminar por el directorio de forma recursiva para buscar archivos PDF
+        # Escaneo recursivo manual para asegurar el manejo correcto de subcarpetas técnicas
         for root, _, files in os.walk(folder_path):
             for file in files:
                 if file.lower().endswith('.pdf'):
                     full_path = os.path.join(root, file)
                     try:
-                        # Extraer contenido de texto y planos usando visión
                         file_docs = extract_pdf_content_with_vision(full_path)
                         all_documents.extend(file_docs)
                     except Exception as fe:
-                        print(f"⚠️ Error omitiendo archivo {full_path}: {fe}")
+                        print(f"⚠️ Ignorando archivo dañado o inaccesible {full_path}: {fe}")
 
         if not all_documents:
-            return JSONResponse(status_code=400, content={"error": "No se encontraron PDFs válidos en la carpeta."})
+            return JSONResponse(status_code=400, content={"error": "No se encontraron archivos PDF dentro del directorio."})
 
         splitter = RecursiveCharacterTextSplitter(chunk_size=1800, chunk_overlap=300)
         docs = splitter.split_documents(all_documents)
@@ -210,7 +210,7 @@ async def index_folder(folder_path: str = Form(...)):
 
         unique_files = list(set([os.path.basename(d.metadata['source']) for d in all_documents]))
         return {
-            "message": f"Indexación completa con análisis de imágenes: {len(unique_files)} archivos analizados.",
+            "message": f"Indexación de planos e información masiva completada: {len(unique_files)} archivos procesados.",
             "files": unique_files
         }
     except Exception as e:
@@ -223,7 +223,7 @@ async def ask_folder(question: str = Form(...)):
     if folder_vectorstore is None:
         return {"answer": "❌ Indexa una carpeta primero."}
 
-    template = """Eres un Analista de Documentos e Ingeniero Experto de CFE. Usa el contexto provisto (que incluye transcripciones de texto e interpretaciones detalladas de planos y elementos visuales) para responder la pregunta de forma fáctica. Identifica siempre el archivo fuente.
+    template = """Eres un Ingeniero Analista del Sistema de Información de CFE El Cajón. Utiliza los fragmentos de contexto provistos (que incluyen transcripciones de texto e interpretaciones técnicas de planos y esquemas analizados por visión computacional) para responder la pregunta de forma técnica y fáctica.
     Contexto: {context}
     Pregunta: {question}
     Respuesta:"""
@@ -238,8 +238,12 @@ async def ask_folder(question: str = Form(...)):
 
     result = chain.invoke({"query": question})
     sources = list(set([os.path.basename(doc.metadata['source']) for doc in result["source_documents"]]))
-    paths_str = "\n\n**📍 Ubicación del documento:**\n" + "\n".join([f"📄 `{s}`" for s in sources])
-    return {"answer": result["result"] + paths_str}
+    
+    # Retornamos respuesta y fuentes por separado para cumplir con el esquema limpio que requiere el frontend
+    return {
+        "answer": result["result"],
+        "sources": sources
+    }
 
 
 @app.post("/clear_index/")
@@ -249,7 +253,7 @@ async def clear_index():
     pdf_vectorstore = None
     if os.path.exists(FAISS_INDEX_PATH):
         shutil.rmtree(FAISS_INDEX_PATH)
-    return {"message": "Índices borrados por completo."}
+    return {"message": "Índices de memoria y almacenamiento local eliminados correctamente."}
 
 
 @app.get("/health")
@@ -257,10 +261,8 @@ async def health():
     return {
         "pdf_ready": pdf_vectorstore is not None,
         "folder_ready": folder_vectorstore is not None,
-        "embeddings_model": "intfloat/multilingual-e5-large",
-        "vision_model": VISION_MODEL,
-        "folder_llm": TEXT_MODEL_FOLDER,
-        "pdf_llm": TEXT_MODEL_PDF
+        "embeddings": "intfloat/multilingual-e5-large",
+        "vision_llm_active": VISION_MODEL
     }
 
 if __name__ == "__main__":
