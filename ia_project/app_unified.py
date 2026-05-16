@@ -1,127 +1,286 @@
 import streamlit as st
 import requests
-import os
 import tkinter as tk
 from tkinter import filedialog
 
 API_URL = "http://127.0.0.1:8001"
 
-st.set_page_config(page_title="Asistente IA Unificado", layout="centered", page_icon="🤖")
+st.set_page_config(
+    page_title="CFE Intelligent Assistant",
+    page_icon="⚡",
+    layout="wide"
+)
 
-# Inicialización de estados
-if "pdf_messages" not in st.session_state: st.session_state.pdf_messages = []
-if "folder_messages" not in st.session_state: st.session_state.folder_messages = []
-if "folder_path" not in st.session_state: st.session_state.folder_path = ""
-if "indexed" not in st.session_state: st.session_state.indexed = False
+# ==========================================================
+# STATES
+# ==========================================================
+
+if "pdf_messages" not in st.session_state:
+    st.session_state.pdf_messages = []
+
+if "folder_messages" not in st.session_state:
+    st.session_state.folder_messages = []
+
+if "folder_path" not in st.session_state:
+    st.session_state.folder_path = ""
+
+if "indexed" not in st.session_state:
+    st.session_state.indexed = False
+
+if "pdf_loaded" not in st.session_state:
+    st.session_state.pdf_loaded = False
+
+# ==========================================================
+# SELECT FOLDER
+# ==========================================================
 
 def select_folder():
+
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
+
     folder_selected = filedialog.askdirectory(master=root)
+
     root.destroy()
+
     return folder_selected
 
-st.title("🤖 Asistente Inteligente Unificado")
+# ==========================================================
+# TITLE
+# ==========================================================
 
-tab1, tab2 = st.tabs(["📄 Chat PDF Individual", "📂 Chat con Carpetas"])
+st.title("⚡ Asistente Inteligente CFE")
 
-# ============================================
-# TAB 1: PDF INDIVIDUAL
-# ============================================
+tab1, tab2 = st.tabs([
+    "📄 Documento Individual",
+    "📂 Biblioteca Documental"
+])
+
+# ==========================================================
+# TAB PDF
+# ==========================================================
+
 with tab1:
-    st.markdown("### 📄 Preguntas sobre un PDF")
-    uploaded_file = st.file_uploader("Sube tu archivo", type="pdf")
 
-    col1, col2 = st.columns([3, 1])
+    st.subheader("📄 Análisis Individual")
+
+    uploaded_file = st.file_uploader(
+        "Sube un PDF",
+        type="pdf"
+    )
+
+    col1, col2 = st.columns(2)
+
     with col1:
-        if uploaded_file and st.button("📤 Procesar"):
-            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-            res = requests.post(f"{API_URL}/upload_pdf/", files=files)
-            if res.status_code == 200:
-                st.success("✅ PDF Listo")
-            else:
-                st.error(f"❌ Error: {res.json().get('error', 'Desconocido')}")
+
+        if uploaded_file and not st.session_state.pdf_loaded:
+
+            if st.button("📤 Procesar PDF"):
+
+                with st.spinner("Procesando documento..."):
+
+                    files = {
+                        "file": (
+                            uploaded_file.name,
+                            uploaded_file.getvalue(),
+                            "application/pdf"
+                        )
+                    }
+
+                    res = requests.post(
+                        f"{API_URL}/upload_pdf/",
+                        files=files
+                    )
+
+                    if res.status_code == 200:
+
+                        st.session_state.pdf_loaded = True
+
+                        st.success("✅ PDF procesado")
+
+                    else:
+
+                        st.error(
+                            res.json().get("error")
+                        )
+
+        elif st.session_state.pdf_loaded:
+            st.success("✅ PDF ya cargado")
+
     with col2:
-        if st.button("🗑️ Limpiar", key="c1"):
+
+        if st.button("🗑️ Limpiar PDF"):
+
             st.session_state.pdf_messages = []
+            st.session_state.pdf_loaded = False
+
+            requests.post(f"{API_URL}/clear_index/")
+
             st.rerun()
 
-    style = st.selectbox("Estilo", ["normal", "amable", "agresivo"])
+    st.divider()
 
     for msg in st.session_state.pdf_messages:
+
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Pregunta algo...", key="in1"):
-        st.session_state.pdf_messages.append({"role": "user", "content": prompt})
+    if prompt := st.chat_input("Pregunta sobre el documento..."):
+
+        st.session_state.pdf_messages.append({
+            "role": "user",
+            "content": prompt
+        })
+
         with st.chat_message("user"):
             st.write(prompt)
-        res = requests.post(f"{API_URL}/ask_pdf/", data={"question": prompt, "style": style})
-        ans = res.json().get("answer", "Error")
+
+        with st.spinner("Analizando..."):
+
+            res = requests.post(
+                f"{API_URL}/ask_pdf/",
+                data={"question": prompt}
+            )
+
+            ans = res.json().get("answer")
+
         with st.chat_message("assistant"):
-            st.write(ans)
-        st.session_state.pdf_messages.append({"role": "assistant", "content": ans})
+            st.markdown(ans)
 
-# ============================================
-# TAB 2: CARPETA
-# ============================================
+        st.session_state.pdf_messages.append({
+            "role": "assistant",
+            "content": ans
+        })
+
+# ==========================================================
+# TAB FOLDER
+# ==========================================================
+
 with tab2:
-    st.markdown("### 📂 Búsqueda en Biblioteca de Documentos")
 
-    col_input, col_btn = st.columns([4, 1])
+    st.subheader("📂 Biblioteca Documental")
+
+    col_input, col_btn = st.columns([4,1])
+
     with col_input:
-        path_input = st.text_input("Ruta de la carpeta", value=st.session_state.folder_path)
-        # ✅ FIX #3: sincronizar el texto escrito manualmente al estado de sesión
+
+        path_input = st.text_input(
+            "Ruta de carpeta",
+            value=st.session_state.folder_path
+        )
+
         if path_input != st.session_state.folder_path:
             st.session_state.folder_path = path_input
 
     with col_btn:
-        st.write(" ")
+
+        st.write("")
+
         if st.button("📁 Buscar"):
+
             selected = select_folder()
+
             if selected:
                 st.session_state.folder_path = selected
                 st.rerun()
 
-    col_idx, col_clr = st.columns(2)
-    with col_idx:
-        if st.button("🚀 Iniciar Indexación", use_container_width=True):
-            if st.session_state.folder_path:
-                with st.spinner("Indexando..."):
-                    res = requests.post(f"{API_URL}/index_folder/", data={"folder_path": st.session_state.folder_path})
-                    if res.status_code == 200:
-                        st.session_state.indexed = True
-                        data = res.json()
-                        st.success(f"✅ {data.get('message', 'Indexación completa')}")
-                    else:
-                        st.error(f"❌ Error: {res.json().get('error', 'Desconocido')}")
-            else:
-                st.warning("⚠️ Selecciona una carpeta primero.")
+    col3, col4 = st.columns(2)
 
-    with col_clr:
-        if st.button("🗑️ Eliminar Índice", use_container_width=True):
+    with col3:
+
+        if st.button("🚀 Indexar"):
+
+            if st.session_state.folder_path:
+
+                with st.spinner("Indexando documentos..."):
+
+                    res = requests.post(
+                        f"{API_URL}/index_folder/",
+                        data={
+                            "folder_path":
+                            st.session_state.folder_path
+                        }
+                    )
+
+                    if res.status_code == 200:
+
+                        st.session_state.indexed = True
+
+                        st.success(
+                            res.json().get("message")
+                        )
+
+                    else:
+
+                        st.error(
+                            res.json().get("error")
+                        )
+
+            else:
+
+                st.warning("Selecciona carpeta")
+
+    with col4:
+
+        if st.button("🗑️ Eliminar Índice"):
+
             requests.post(f"{API_URL}/clear_index/")
+
             st.session_state.indexed = False
-            st.session_state.folder_path = ""
             st.session_state.folder_messages = []
+
             st.rerun()
 
     if st.session_state.indexed:
-        st.info(f"📌 Carpeta activa: `{st.session_state.folder_path}`")
+
+        st.info(
+            f"📌 Carpeta activa: "
+            f"{st.session_state.folder_path}"
+        )
 
     st.divider()
 
     for msg in st.session_state.folder_messages:
+
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt_f := st.chat_input("Pregunta sobre la carpeta...", key="in2"):
-        st.session_state.folder_messages.append({"role": "user", "content": prompt_f})
+    if prompt_f := st.chat_input(
+        "Pregunta sobre la biblioteca..."
+    ):
+
+        st.session_state.folder_messages.append({
+            "role": "user",
+            "content": prompt_f
+        })
+
         with st.chat_message("user"):
             st.write(prompt_f)
-        res = requests.post(f"{API_URL}/ask_folder/", data={"question": prompt_f})
-        ans = res.json().get("answer", "Error de conexión")
+
+        with st.spinner("Consultando documentos..."):
+
+            res = requests.post(
+                f"{API_URL}/ask_folder/",
+                data={"question": prompt_f}
+            )
+
+            data = res.json()
+
+            ans = data.get("answer")
+            sources = data.get("sources", [])
+
+            if sources:
+
+                ans += "\n\n### 📁 Archivos fuente\n"
+
+                for s in sources:
+                    ans += f"- `{s}`\n"
+
         with st.chat_message("assistant"):
             st.markdown(ans)
-        st.session_state.folder_messages.append({"role": "assistant", "content": ans})
+
+        st.session_state.folder_messages.append({
+            "role": "assistant",
+            "content": ans
+        })
