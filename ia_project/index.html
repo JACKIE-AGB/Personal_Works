@@ -3,11 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Google</title>
-
-  <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
-
+  <title>Google - CFE Intelligent Search</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -16,827 +13,389 @@
   <div class="header-links">
     <a href="#">Gmail</a>
     <a href="#">Imágenes</a>
-
     <div class="apps-icon">
       <i class="fas fa-th"></i>
     </div>
-
     <div class="user-profile">M</div>
   </div>
 </header>
 
-<!-- HOME -->
 <main id="main-view">
-
   <div class="logo-container">
     <div class="logo">
-      <span>G</span><span>o</span><span>o</span>
-      <span>g</span><span>l</span><span>e</span>
+      <span>G</span><span>O</span><span>O</span><span>G</span><span>l</span><span>E</span>
     </div>
   </div>
 
   <div class="search-container">
-
-    <!-- SEARCH -->
     <div class="search-box">
       <i class="fas fa-search search-icon"></i>
-
-      <input
-        type="text"
-        class="search-input"
-        id="searchInput"
-        placeholder="Buscar o hacer una pregunta..."
-      />
-
+      <input type="text" class="search-input" id="searchInput" placeholder="Buscar o hacer una pregunta técnica..." />
       <div class="search-icons">
         <i class="fas fa-microphone microphone-icon"></i>
         <i class="fas fa-camera camera-icon"></i>
       </div>
     </div>
 
-    <!-- TABS -->
     <div class="mode-tabs">
-
-      <button
-        class="mode-tab active"
-        id="tabPdf"
-        onclick="switchTab('pdf')">
-
-        <i class="fas fa-file-pdf"></i>
-        PDF Individual
+      <button class="mode-tab active" id="tabPdf" onclick="switchTab('pdf')">
+        <i class="fas fa-file-pdf"></i> PDF Individual
       </button>
-
-      <button
-        class="mode-tab"
-        id="tabFolder"
-        onclick="switchTab('folder')">
-
-        <i class="fas fa-folder-open"></i>
-        Carpeta de Documentos
+      <button class="mode-tab" id="tabFolder" onclick="switchTab('folder')">
+        <i class="fas fa-folder-open"></i> Carpeta de Documentos
       </button>
-
     </div>
 
-    <!-- PDF PANEL -->
     <div id="panelPdf" class="action-panel">
-
       <div class="action-row">
-
         <label class="upload-label" for="pdfFileInput">
-
-          <i class="fas fa-upload"></i>
-          Subir PDF
-
-          <input
-            type="file"
-            id="pdfFileInput"
-            accept=".pdf"
-            style="display:none"
-            onchange="onPdfSelected()"
-          />
-
+          <i class="fas fa-upload"></i> Subir PDF
+          <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="onPdfSelected()" />
         </label>
-
-        <span id="pdfFileName" class="filename-hint">
-          Sin archivo
-        </span>
-
+        <span id="pdfFileName" class="filename-hint">Sin archivo</span>
+        
         <select id="styleSelect" class="style-select">
           <option value="normal">Estilo: Normal</option>
           <option value="amable">Estilo: Amable</option>
           <option value="agresivo">Estilo: Directo</option>
         </select>
 
-        <button
-          class="action-btn primary-btn"
-          onclick="processPdf()">
-
-          <i class="fas fa-cogs"></i>
-          Procesar PDF
+        <button class="action-btn primary-btn" onclick="processPdf()">
+          <i class="fas fa-cogs"></i> Procesar PDF
         </button>
-
-        <button
-          class="action-btn ghost-btn"
-          onclick="clearPdfChat()">
-
-          <i class="fas fa-trash"></i>
-          Limpiar
+        <button class="action-btn ghost-btn" onclick="clearPdfChat()">
+          <i class="fas fa-trash"></i> Limpiar
         </button>
-
       </div>
-
-      <div id="pdfStatus"
-           class="status-badge"
-           style="display:none"></div>
-
-      <div id="pdfActiveBadge"
-           class="status-badge status-ok"
-           style="display:none"></div>
-
+      <div id="pdfStatus" class="status-badge" style="display:none"></div>
+      <div id="pdfActiveBadge" class="status-badge status-ok" style="display:none"></div>
     </div>
 
-    <!-- FOLDER PANEL -->
-    <div id="panelFolder"
-         class="action-panel"
-         style="display:none">
-
+    <div id="panelFolder" class="action-panel" style="display:none">
       <div class="action-row">
-
-        <input
-          type="text"
-          id="folderPathInput"
-          class="folder-path-input"
-          placeholder="Ruta de la carpeta"
-        />
-
-        <button
-          class="action-btn primary-btn"
-          onclick="indexFolder()">
-
-          <i class="fas fa-database"></i>
-          Indexar
+        <input type="text" id="folderPathInput" class="folder-path-input" placeholder="Ruta del directorio en el servidor..." />
+        <button class="action-btn primary-btn" onclick="indexFolder()">
+          <i class="fas fa-database"></i> Indexar Carpeta
         </button>
-
-        <button
-          class="action-btn ghost-btn"
-          onclick="clearIndex()">
-
-          <i class="fas fa-trash-alt"></i>
-          Eliminar Índice
+        <button class="action-btn ghost-btn" onclick="clearIndex()">
+          <i class="fas fa-trash-alt"></i> Eliminar Índice
         </button>
-
       </div>
-
-      <div id="folderStatus"
-           class="status-badge"
-           style="display:none"></div>
-
+      <div id="folderStatus" class="status-badge" style="display:none"></div>
     </div>
 
-    <!-- SEARCH BUTTONS -->
     <div class="search-buttons">
-
-      <button class="search-btn" onclick="doSearch()">
-        Buscar con Google
-      </button>
-
-      <button class="search-btn">
-        Me siento con suerte
-      </button>
-
+      <button class="search-btn" onclick="doSearch()">Buscar con Google Engine</button>
+      <button class="search-btn">Me siento con suerte</button>
     </div>
-
   </div>
 </main>
 
-<!-- RESULTS -->
 <section id="results-view" style="display:none">
-
   <div class="results-header">
-
     <div class="results-search-row">
-
       <div class="logo-mini">
-        <span>G</span><span>o</span><span>o</span>
-        <span>g</span><span>l</span><span>e</span>
+        <span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span>
       </div>
-
       <div class="search-box results-search-box">
-
         <i class="fas fa-search search-icon"></i>
-
-        <input
-          type="text"
-          class="search-input"
-          id="searchInputResults"
-          placeholder="Buscar o hacer una pregunta..."
-          onkeydown="if(event.key==='Enter') doSearch()"
-        />
-
+        <input type="text" class="search-input" id="searchInputResults" placeholder="Buscar o hacer una pregunta..." onkeydown="if(event.key==='Enter') doSearch()" />
         <div class="search-icons">
           <i class="fas fa-microphone microphone-icon"></i>
           <i class="fas fa-camera camera-icon"></i>
         </div>
-
       </div>
-
-      <button
-        class="results-back-btn"
-        onclick="backToHome()">
-
+      <button class="results-back-btn" onclick="backToHome()">
         <i class="fas fa-home"></i>
       </button>
-
     </div>
 
-    <!-- RESULTS TABS -->
     <div class="results-tabs-bar">
-
-      <button
-        class="results-tab active"
-        id="rtabPdf"
-        onclick="switchTab('pdf')">
-
-        <i class="fas fa-file-pdf"></i>
-        PDF Individual
+      <button class="results-tab active" id="rtabPdf" onclick="switchTab('pdf')">
+        <i class="fas fa-file-pdf"></i> PDF Individual
       </button>
-
-      <button
-        class="results-tab"
-        id="rtabFolder"
-        onclick="switchTab('folder')">
-
-        <i class="fas fa-folder-open"></i>
-        Carpeta de Documentos
+      <button class="results-tab" id="rtabFolder" onclick="switchTab('folder')">
+        <i class="fas fa-folder-open"></i> Carpeta de Documentos
       </button>
-
     </div>
-
   </div>
 
-  <!-- CHAT BODY -->
   <div class="results-body">
-
-    <!-- TYPING -->
-    <div id="aiOverview"
-         class="ai-overview"
-         style="display:none">
-
+    <div id="aiOverview" class="ai-overview" style="display:none">
       <div class="ai-header">
-
         <div class="ai-badge">
-          <i class="fas fa-robot"></i>
-          <span>Respuesta IA</span>
+          <i class="fas fa-robot"></i> <span>Respuesta IA</span>
         </div>
-
         <div class="ai-sparkle">✦</div>
-
       </div>
-
-      <div id="aiTyping"
-           class="ai-typing"
-           style="display:none">
-
-        <span></span>
-        <span></span>
-        <span></span>
-
+      <div id="aiTyping" class="ai-typing" style="display:none">
+        <span></span><span></span><span></span>
       </div>
-
     </div>
-
-    <!-- CHAT -->
-    <div id="chatHistory"
-         class="chat-history"></div>
-
+    <div id="chatHistory" class="chat-history"></div>
   </div>
-
 </section>
 
-<!-- FOOTER -->
 <footer id="main-footer">
-
   <div class="footer-country">
-    <span>México</span>
+    <span>México - Central Hidroeléctrica</span>
   </div>
-
 </footer>
 
 <script>
-
 const API = "http://127.0.0.1:8001";
-
 let currentTab = "pdf";
 
 let pdfReady = false;
 let folderReady = false;
-
 let pdfFile = null;
-let pdfFileR = null;
-
 let pdfLoadedName = "";
-
-
-// =========================
-// CHAT PERSISTENTE
-// =========================
 
 let chatMessages = {
   pdf: [],
   folder: []
 };
 
-
-// =========================
-// TABS
-// =========================
-
 function switchTab(tab) {
-
   currentTab = tab;
+  document.getElementById("panelPdf").style.display = tab === "pdf" ? "block" : "none";
+  document.getElementById("panelFolder").style.display = tab === "folder" ? "block" : "none";
 
-  // HOME PANELS
-  document.getElementById("panelPdf").style.display =
-    tab === "pdf" ? "block" : "none";
+  document.getElementById("tabPdf").classList.toggle("active", tab === "pdf");
+  document.getElementById("tabFolder").classList.toggle("active", tab === "folder");
+  document.getElementById("rtabPdf").classList.toggle("active", tab === "pdf");
+  document.getElementById("rtabFolder").classList.toggle("active", tab === "folder");
 
-  document.getElementById("panelFolder").style.display =
-    tab === "folder" ? "block" : "none";
-
-
-  document.getElementById("tabPdf")
-    .classList.toggle("active", tab === "pdf");
-
-  document.getElementById("tabFolder")
-    .classList.toggle("active", tab === "folder");
-
-
-  // RESULTS TABS
-  document.getElementById("rtabPdf")
-    .classList.toggle("active", tab === "pdf");
-
-  document.getElementById("rtabFolder")
-    .classList.toggle("active", tab === "folder");
-
-
-  // RENDER CHAT PROPIO
   renderHistory();
-
   refreshPdfBadge();
 }
 
-
-// =========================
-// PDF BADGE
-// =========================
-
 function refreshPdfBadge() {
-
   const b = document.getElementById("pdfActiveBadge");
-
   if (pdfReady && pdfLoadedName) {
-
     b.style.display = "inline-flex";
-
-    b.textContent =
-      `📄 PDF activo: ${pdfLoadedName}`;
-
+    b.textContent = `📄 PDF activo: ${pdfLoadedName}`;
   } else {
-
     b.style.display = "none";
   }
 }
 
-
-// =========================
-// PDF
-// =========================
-
 function onPdfSelected() {
-
-  pdfFile =
-    document.getElementById("pdfFileInput").files[0] || null;
-
-  document.getElementById("pdfFileName").textContent =
-    pdfFile ? pdfFile.name : "Sin archivo";
+  pdfFile = document.getElementById("pdfFileInput").files[0] || null;
+  document.getElementById("pdfFileName").textContent = pdfFile ? pdfFile.name : "Sin archivo";
 }
-
-
-async function _uploadPdf(file, statusId) {
-
-  showStatus(statusId, "⏳ Procesando…", "info");
-
-  const fd = new FormData();
-
-  fd.append("file", file);
-
-  try {
-
-    const res =
-      await fetch(`${API}/upload_pdf/`, {
-        method:"POST",
-        body:fd
-      });
-
-    const data = await res.json();
-
-    if (res.ok) {
-
-      pdfReady = true;
-
-      pdfLoadedName = file.name;
-
-      showStatus(
-        statusId,
-        `✅ PDF listo: ${file.name}`,
-        "ok"
-      );
-
-      refreshPdfBadge();
-
-    } else {
-
-      showStatus(
-        statusId,
-        `❌ ${data.error}`,
-        "error"
-      );
-    }
-
-  } catch {
-
-    showStatus(
-      statusId,
-      "❌ Error de conexión",
-      "error"
-    );
-  }
-}
-
 
 async function processPdf() {
-
   if (!pdfFile) {
-
-    showStatus(
-      "pdfStatus",
-      "⚠️ Selecciona un PDF primero",
-      "warn"
-    );
-
+    showStatus("pdfStatus", "⚠️ Selecciona un PDF primero", "warn");
     return;
   }
-
-  await _uploadPdf(pdfFile, "pdfStatus");
-}
-
-
-// =========================
-// FOLDER
-// =========================
-
-async function indexFolder() {
-
-  const path =
-    document.getElementById("folderPathInput")
-      .value
-      .trim();
-
-  if (!path) {
-
-    showStatus(
-      "folderStatus",
-      "⚠️ Escribe una ruta",
-      "warn"
-    );
-
-    return;
-  }
-
-  showStatus(
-    "folderStatus",
-    "⏳ Indexando...",
-    "info"
-  );
+  showStatus("pdfStatus", "⏳ Procesando texto y analizando planos visualmente...", "info");
 
   const fd = new FormData();
+  fd.append("file", pdfFile);
 
+  try {
+    const res = await fetch(`${API}/upload_pdf/`, { method: "POST", body: fd });
+    const data = await res.json();
+    if (res.ok) {
+      pdfReady = true;
+      pdfLoadedName = pdfFile.name;
+      showStatus("pdfStatus", `✅ PDF procesado con éxito`, "ok");
+      refreshPdfBadge();
+    } else {
+      showStatus("pdfStatus", `❌ ${data.error}`, "error");
+    }
+  } catch {
+    showStatus("pdfStatus", "❌ Error de conexión con el servidor backend", "error");
+  }
+}
+
+async function indexFolder() {
+  const path = document.getElementById("folderPathInput").value.trim();
+  if (!path) {
+    showStatus("folderStatus", "⚠️ Escribe una ruta válida", "warn");
+    return;
+  }
+  showStatus("folderStatus", "⏳ Indexando carpeta recursivamente (extrayendo planos)...", "info");
+
+  const fd = new FormData();
   fd.append("folder_path", path);
 
   try {
-
-    const res =
-      await fetch(`${API}/index_folder/`, {
-        method:"POST",
-        body:fd
-      });
-
+    const res = await fetch(`${API}/index_folder/`, { method: "POST", body: fd });
     const data = await res.json();
-
     if (res.ok) {
-
       folderReady = true;
-
-      showStatus(
-        "folderStatus",
-        "✅ Carpeta indexada",
-        "ok"
-      );
-
+      showStatus("folderStatus", `✅ Indexación completada. Documentos: ${data.documents}`, "ok");
     } else {
-
-      showStatus(
-        "folderStatus",
-        `❌ ${data.error}`,
-        "error"
-      );
+      showStatus("folderStatus", `❌ ${data.error}`, "error");
     }
-
   } catch {
-
-    showStatus(
-      "folderStatus",
-      "❌ Error de conexión",
-      "error"
-    );
+    showStatus("folderStatus", "❌ Error de conexión con el servidor backend", "error");
   }
 }
 
-
-// =========================
-// SEARCH
-// =========================
-
 function doSearch() {
-
-  const inResults =
-    document.getElementById("results-view")
-      .style.display !== "none";
-
-  const input =
-    document.getElementById(
-      inResults
-        ? "searchInputResults"
-        : "searchInput"
-    );
-
+  const inResults = document.getElementById("results-view").style.display !== "none";
+  const input = document.getElementById(inResults ? "searchInputResults" : "searchInput");
   const q = input.value.trim();
-
   if (!q) return;
 
   showResultsView();
-
   input.value = "";
-
   askQuestion(q);
 }
 
-
-// ENTER
-document
-.getElementById("searchInput")
-.addEventListener("keydown", e => {
-
-  if (e.key === "Enter") {
-    doSearch();
-  }
-
+document.getElementById("searchInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") doSearch();
 });
 
-
-// =========================
-// ASK QUESTION
-// =========================
-
 async function askQuestion(q) {
-
-  // USER MESSAGE
-  chatMessages[currentTab].push({
-    role:"user",
-    content:q
-  });
-
+  chatMessages[currentTab].push({ role: "user", content: q });
   renderHistory();
-
   scrollToBottom();
-
   showTyping();
 
   const fd = new FormData();
-
   fd.append("question", q);
 
   let endpoint;
-
   if (currentTab === "pdf") {
-
     if (!pdfReady) {
-
-      receiveAnswer(
-        "❌ Primero sube y procesa un PDF."
-      );
-
+      receiveAnswer("❌ Primero sube y procesa un PDF técnico.");
       return;
     }
-
-    const style =
-      document.getElementById("styleSelect").value;
-
+    const style = document.getElementById("styleSelect").value;
     fd.append("style", style);
-
     endpoint = `${API}/ask_pdf/`;
-
   } else {
-
     if (!folderReady) {
-
-      receiveAnswer(
-        "❌ Primero indexa una carpeta."
-      );
-
+      receiveAnswer("❌ Primero proporciona e indexa una carpeta del sistema.");
       return;
     }
-
     endpoint = `${API}/ask_folder/`;
   }
 
   try {
-
-    const res =
-      await fetch(endpoint, {
-        method:"POST",
-        body:fd
-      });
-
+    const res = await fetch(endpoint, { method: "POST", body: fd });
     const data = await res.json();
-
-    receiveAnswer(
-      data.answer || "Sin respuesta"
-    );
-
+    receiveAnswer(data.answer || "Sin respuesta del modelo", data.sources || null);
   } catch {
-
-    receiveAnswer(
-      "❌ No se pudo conectar con el servidor."
-    );
+    receiveAnswer("❌ Error crítico: No se pudo establecer conexión con la API.");
   }
 }
 
-
-// =========================
-// RECEIVE ANSWER
-// =========================
-
-function receiveAnswer(text) {
-
+function receiveAnswer(text, sources) {
   hideTyping();
-
   chatMessages[currentTab].push({
-    role:"assistant",
-    content:text
+    role: "assistant",
+    content: text,
+    sources: sources
   });
-
   renderHistory();
-
   scrollToBottom();
 }
 
-
-// =========================
-// RENDER CHAT
-// =========================
-
 function renderHistory() {
-
-  const container =
-    document.getElementById("chatHistory");
-
+  const container = document.getElementById("chatHistory");
   const msgs = chatMessages[currentTab];
 
   container.innerHTML = msgs.map(m => `
-
     <div class="chat-bubble ${m.role}">
-
-      ${
-        m.role === "user"
-
-        ? `
-          <div class="bubble-icon user-icon">
-            <i class="fas fa-user"></i>
-          </div>
-        `
-
-        : `
-          <div class="bubble-icon bot-icon">
-            <i class="fas fa-robot"></i>
-          </div>
-        `
-      }
-
-      <div class="bubble-text">
-        ${m.content.replace(/\n/g,"<br>")}
+      <div class="bubble-icon ${m.role === 'user' ? 'user-icon' : 'bot-icon'}">
+        <i class="fas ${m.role === 'user' ? 'fa-user' : 'fa-robot'}"></i>
       </div>
-
+      <div class="bubble-text">
+        <div>${m.content.replace(/\n/g, "<br>")}</div>
+        ${m.sources && m.sources.length > 0 ? `
+          <div style="margin-top: 10px; font-size: 11px; color: var(--muted); border-top: 1px dashed var(--border); padding-top: 4px;">
+            <strong>Fuentes Técnicas:</strong> ${m.sources.join(", ")}
+          </div>
+        ` : ''}
+      </div>
     </div>
-
   `).join("");
 }
 
-
-// =========================
-// TYPING
-// =========================
-
 function showTyping() {
-
-  document.getElementById("aiOverview")
-    .style.display = "block";
-
-  document.getElementById("aiTyping")
-    .style.display = "flex";
+  document.getElementById("aiOverview").style.display = "block";
+  document.getElementById("aiTyping").style.display = "flex";
 }
-
 
 function hideTyping() {
-
-  document.getElementById("aiTyping")
-    .style.display = "none";
-
-  document.getElementById("aiOverview")
-    .style.display = "none";
+  document.getElementById("aiTyping").style.display = "none";
+  document.getElementById("aiOverview").style.display = "none";
 }
-
-
-// =========================
-// RESULTS VIEW
-// =========================
 
 function showResultsView() {
-
-  document.getElementById("main-view")
-    .style.display = "none";
-
-  document.getElementById("main-footer")
-    .style.display = "none";
-
-  document.getElementById("results-view")
-    .style.display = "block";
+  document.getElementById("main-view").style.display = "none";
+  document.getElementById("main-footer").style.display = "none";
+  document.getElementById("results-view").style.display = "block";
 }
-
-
-// =========================
-// HOME
-// =========================
 
 function backToHome() {
-
-  document.getElementById("main-view")
-    .style.display = "flex";
-
-  document.getElementById("main-footer")
-    .style.display = "block";
-
-  document.getElementById("results-view")
-    .style.display = "none";
+  document.getElementById("main-view").style.display = "flex";
+  document.getElementById("main-footer").style.display = "block";
+  document.getElementById("results-view").style.display = "none";
 }
 
-
-// =========================
-// CLEAR PDF
-// =========================
-
-function clearPdfChat() {
-
+// ==========================================================
+// OPERACIONES DE LIMPIEZA INTEGRAL (FRONTEND + BACKEND)
+// ==========================================================
+async function clearPdfChat() {
+  // Vaciar campos en frontend
+  document.getElementById("pdfFileInput").value = "";
+  document.getElementById("pdfFileName").textContent = "Sin archivo";
   chatMessages.pdf = [];
-
+  pdfReady = false;
+  pdfFile = null;
+  pdfLoadedName = "";
+  
   renderHistory();
+  refreshPdfBadge();
+  showStatus("pdfStatus", "⏳ Purgando almacenamiento del servidor...", "info");
+
+  try {
+    await fetch(`${API}/clear_index/`, { method: "POST" });
+    showStatus("pdfStatus", "🧹 Campos y memoria de PDFs limpiados por completo.", "info");
+  } catch {
+    showStatus("pdfStatus", "⚠️ Frontend limpio, pero no se pudo comunicar con el backend para purgar disco.", "warn");
+  }
 }
 
-
-// =========================
-// CLEAR FOLDER
-// =========================
-
-function clearIndex() {
-
+async function clearIndex() {
+  // Vaciar campos en frontend
+  document.getElementById("folderPathInput").value = "";
   chatMessages.folder = [];
-
+  folderReady = false;
+  
   renderHistory();
+  showStatus("folderStatus", "⏳ Eliminando índices vectoriales del sistema...", "info");
+
+  try {
+    await fetch(`${API}/clear_index/`, { method: "POST" });
+    showStatus("folderStatus", "🧹 Índices masivos y campos borrados de raíz.", "info");
+  } catch {
+    showStatus("folderStatus", "⚠️ Campos reseteados, pero falló la purga en disco del backend.", "warn");
+  }
 }
-
-
-// =========================
-// STATUS
-// =========================
 
 function showStatus(id, msg, type) {
-
   const el = document.getElementById(id);
-
   el.style.display = "inline-flex";
-
   el.textContent = msg;
-
-  el.className =
-    `status-badge status-${type}`;
+  el.className = `status-badge status-${type}`;
 }
-
-
-// =========================
-// SCROLL
-// =========================
 
 function scrollToBottom() {
-
   setTimeout(() => {
-
     window.scrollTo({
       top: document.body.scrollHeight,
-      behavior:"smooth"
+      behavior: "smooth"
     });
-
   }, 50);
 }
-
 </script>
 </body>
 </html>

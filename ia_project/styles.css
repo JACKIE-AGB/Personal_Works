@@ -987,3 +987,28 @@ footer{
         max-width:220px;
     }
 }
+
+/* Optimizaciones extras para visualización de rutas e inputs */
+.folder-path-input {
+    flex: 1;
+    min-width: 280px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    outline: none;
+    font-size: 13px;
+}
+
+.folder-path-input:focus {
+    border-color: var(--blue);
+}
+
+.style-select {
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: white;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+}
