@@ -7,6 +7,155 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
   <link rel="stylesheet" href="styles.css" />
   <style>
+    /* REESTRUCTURACIÓN DE DISEÑO DE APP CON SIDEBAR ESTILO GEMINI */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #ffffff;
+    }
+    
+    .app-container {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+    }
+
+    /* ESTILOS DE LA BARRA LATERAL (DARK THEME) */
+    .sidebar {
+      width: 280px;
+      background-color: #131314;
+      color: #e3e3e3;
+      display: flex;
+      flex-direction: column;
+      padding: 16px 12px;
+      box-sizing: border-box;
+      border-right: 1px solid #303134;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+    
+    .sidebar-header {
+      font-size: 18px;
+      font-weight: 500;
+      margin-bottom: 20px;
+      padding-left: 8px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sidebar-header i {
+      color: #4285f4;
+    }
+
+    .new-chat-btn {
+      background: #1e1e1f;
+      color: #e3e3e3;
+      border: none;
+      padding: 12px 16px;
+      border-radius: 24px;
+      text-align: left;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .new-chat-btn:hover {
+      background: #2b2b2c;
+    }
+
+    .sidebar-menu-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #c4c7c5;
+      margin-bottom: 4px;
+    }
+    .sidebar-menu-item:hover {
+      background: #1e1e1f;
+      color: #ffffff;
+    }
+
+    .sidebar-section-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #7c7f82;
+      margin: 20px 0 10px 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .history-card {
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .history-card:hover, .history-card.active {
+      background: #1e1e1f;
+    }
+    
+    .history-card-title {
+      font-size: 14px;
+      color: #e3e3e3;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .history-card-subtext {
+      font-size: 11px;
+      color: #80868b;
+      padding-left: 22px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: normal;
+    }
+    .history-card-subtext:hover {
+      color: #1a73e8;
+      text-decoration: underline;
+    }
+
+    /* CONTENEDOR PRINCIPAL */
+    .main-app-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow-y: auto;
+      position: relative;
+    }
+
     /* Estilos del modal para Vista Previa de Documentos Técnicos CFE */
     .preview-modal {
       position: fixed;
@@ -89,158 +238,182 @@
 </head>
 <body>
 
-<header>
-  <div class="header-links">
-    <a href="#">Gmail</a>
-    <a href="#">Imágenes</a>
-    <div class="apps-icon">
-      <i class="fas fa-th"></i>
+<div class="app-container">
+  
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <i class="fas fa-layer-group"></i> <span>CFE Intelligent</span>
     </div>
-    <div class="user-profile">M</div>
-  </div>
-</header>
-
-<main id="main-view">
-  <div class="logo-container">
-    <div class="logo">
-      <span>G</span><span>O</span><span>O</span><span>G</span><span>l</span><span>E</span>
-    </div>
-  </div>
-
-  <div class="search-container">
-    <div class="search-box">
-      <i class="fas fa-search search-icon"></i>
-      <input type="text" class="search-input" id="searchInput" placeholder="Buscar o hacer una pregunta técnica..." />
-      <div class="search-icons">
-        <i class="fas fa-microphone microphone-icon"></i>
-        <i class="fas fa-camera camera-icon"></i>
+    <button class="new-chat-btn" onclick="backToHome()"><i class="fas fa-plus"></i> Nueva conversación</button>
+    
+    <div class="sidebar-menu-item"><i class="fas fa-search"></i> Buscar conversaciones</div>
+    <div class="sidebar-menu-item"><i class="fas fa-book-bookmark"></i> Biblioteca</div>
+    
+    <div class="sidebar-section-title">Recientes</div>
+    <div class="history-list" id="sidebarHistoryList">
       </div>
-    </div>
+  </aside>
 
-    <div class="mode-tabs">
-      <button class="mode-tab active" id="tabPdf" onclick="switchTab('pdf')">
-        <i class="fas fa-file-pdf"></i> PDF Individual
-      </button>
-      <button class="mode-tab" id="tabFolder" onclick="switchTab('folder')">
-        <i class="fas fa-folder-open"></i> Carpeta de Documentos
-      </button>
-    </div>
-
-    <div id="panelContainerHome" class="panel-container">
-      <div id="panelPdf" class="action-panel">
-        <div class="action-row">
-          <label class="upload-label" for="pdfFileInput">
-            <i class="fas fa-upload"></i> Subir PDF
-            <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="onPdfSelected()" />
-          </label>
-          <span id="pdfFileName" class="filename-hint">Sin archivo</span>
-          
-          <select id="styleSelect" class="style-select">
-            <option value="normal">Estilo: Normal</option>
-            <option value="amable">Estilo: Amable</option>
-            <option value="agresivo">Estilo: Directo</option>
-          </select>
-
-          <button class="action-btn primary-btn" onclick="processPdf()">
-            <i class="fas fa-cogs"></i> Procesar PDF
-          </button>
-          <button class="action-btn ghost-btn" onclick="clearPdfChat()">
-            <i class="fas fa-trash"></i> Limpiar
-          </button>
+  <div class="main-app-content">
+    
+    <header>
+      <div class="header-links">
+        <a href="#">Gmail</a>
+        <a href="#">Imágenes</a>
+        <div class="apps-icon">
+          <i class="fas fa-th"></i>
         </div>
-        <div id="pdfStatus" class="status-badge" style="display:none"></div>
-        <div id="pdfActiveBadge" class="status-badge status-ok" style="display:none"></div>
+        <div class="user-profile">M</div>
       </div>
+    </header>
 
-      <div id="panelFolder" class="action-panel" style="display:none">
-        <div class="action-row">
-          <input type="text" id="folderPathInput" class="folder-path-input" placeholder="Ruta del directorio en el servidor..." />
-          <button class="action-btn primary-btn" onclick="indexFolder()">
-            <i class="fas fa-database"></i> Indexar Carpeta
-          </button>
-          <button class="action-btn ghost-btn" onclick="clearIndex()">
-            <i class="fas fa-trash-alt"></i> Eliminar Índice
-          </button>
-        </div>
-        <div id="folderStatus" class="status-badge" style="display:none"></div>
-      </div>
-    </div>
-
-    <div class="search-buttons">
-      <button class="search-btn" onclick="doSearch()">Buscar con Google Engine</button>
-      <button class="search-btn">Me siento con suerte</button>
-    </div>
-  </div>
-</main>
-
-<section id="results-view" style="display:none">
-  <div class="results-header">
-    <div class="results-search-row">
-      <div class="logo-mini">
-        <span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span>
-      </div>
-      <div class="search-box results-search-box">
-        <i class="fas fa-search search-icon"></i>
-        <input type="text" class="search-input" id="searchInputResults" placeholder="Buscar o hacer una pregunta..." onkeydown="if(event.key==='Enter') doSearch()" />
-        <div class="search-icons">
-          <i class="fas fa-microphone microphone-icon"></i>
-          <i class="fas fa-camera camera-icon"></i>
+    <main id="main-view">
+      <div class="logo-container">
+        <div class="logo">
+          <span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span>
         </div>
       </div>
-      <button class="results-back-btn" onclick="backToHome()">
-        <i class="fas fa-home"></i>
-      </button>
-    </div>
 
-    <div class="results-tabs-bar">
-      <button class="results-tab active" id="rtabPdf" onclick="switchTab('pdf')">
-        <i class="fas fa-file-pdf"></i> PDF Individual
-      </button>
-      <button class="results-tab" id="rtabFolder" onclick="switchTab('folder')">
-        <i class="fas fa-folder-open"></i> Carpeta de Documentos
-      </button>
-    </div>
-  </div>
-
-  <div id="panelContainerResults" class="results-action-area"></div>
-
-  <div class="results-body">
-    <div id="aiOverview" class="ai-overview" style="display:none">
-      <div class="ai-header">
-        <div class="ai-badge">
-          <i class="fas fa-robot"></i> <span>Respuesta IA</span>
+      <div class="search-container">
+        <div class="search-box">
+          <i class="fas fa-search search-icon"></i>
+          <input type="text" class="search-input" id="searchInput" placeholder="Buscar o hacer una pregunta técnica..." />
+          <div class="search-icons">
+            <i class="fas fa-microphone microphone-icon"></i>
+            <i class="fas fa-camera camera-icon"></i>
+          </div>
         </div>
-        <div class="ai-sparkle">✦</div>
-      </div>
-      <div id="aiTyping" class="ai-typing" style="display:none">
-        <span></span><span></span><span></span>
-      </div>
-    </div>
-    <div id="chatHistory" class="chat-history"></div>
-  </div>
-</section>
 
-<div id="previewModal" class="preview-modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3 id="modalTitle">Vista Previa de Documento Técnico</h3>
-      <button class="close-modal" onclick="closePreview()">&times;</button>
+        <div class="mode-tabs">
+          <button class="mode-tab active" id="tabPdf" onclick="switchTab('pdf')">
+            <i class="fas fa-file-pdf"></i> PDF Individual
+          </button>
+          <button class="mode-tab" id="tabFolder" onclick="switchTab('folder')">
+            <i class="fas fa-folder-open"></i> Carpeta de Documentos
+          </button>
+        </div>
+
+        <div id="panelContainerHome" class="panel-container">
+          <div id="panelPdf" class="action-panel">
+            <div class="action-row">
+              <label class="upload-label" for="pdfFileInput">
+                <i class="fas fa-upload"></i> Subir PDF
+                <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="onPdfSelected()" />
+              </label>
+              <span id="pdfFileName" class="filename-hint">Sin archivo</span>
+              
+              <select id="styleSelect" class="style-select">
+                <option value="normal">Estilo: Normal</option>
+                <option value="amable">Estilo: Amable</option>
+                <option value="agresivo">Estilo: Directo</option>
+              </select>
+
+              <button class="action-btn primary-btn" onclick="processPdf()">
+                <i class="fas fa-cogs"></i> Procesar PDF
+              </button>
+              <button class="action-btn ghost-btn" onclick="clearPdfChat()">
+                <i class="fas fa-trash"></i> Limpiar
+              </button>
+            </div>
+            <div id="pdfStatus" class="status-badge" style="display:none"></div>
+            <div id="pdfActiveBadge" class="status-badge status-ok" style="display:none"></div>
+          </div>
+
+          <div id="panelFolder" class="action-panel" style="display:none">
+            <div class="action-row">
+              <input type="text" id="folderPathInput" class="folder-path-input" placeholder="Ruta del directorio en el servidor..." />
+              <button class="action-btn primary-btn" onclick="indexFolder()">
+                <i class="fas fa-database"></i> Indexar Carpeta
+              </button>
+              <button class="action-btn ghost-btn" onclick="clearIndex()">
+                <i class="fas fa-trash-alt"></i> Eliminar Índice
+              </button>
+            </div>
+            <div id="folderStatus" class="status-badge" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="search-buttons">
+          <button class="search-btn" onclick="doSearch()">Buscar con Google Engine</button>
+          <button class="search-btn">Me siento con suerte</button>
+        </div>
+      </div>
+    </main>
+
+    <section id="results-view" style="display:none">
+      <div class="results-header">
+        <div class="results-search-row">
+          <div class="logo-mini">
+            <span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span>
+          </div>
+          <div class="search-box results-search-box">
+            <i class="fas fa-search search-icon"></i>
+            <input type="text" class="search-input" id="searchInputResults" placeholder="Buscar o hacer una pregunta..." onkeydown="if(event.key==='Enter') doSearch()" />
+            <div class="search-icons">
+              <i class="fas fa-microphone microphone-icon"></i>
+              <i class="fas fa-camera camera-icon"></i>
+            </div>
+          </div>
+          <button class="results-back-btn" onclick="backToHome()">
+            <i class="fas fa-home"></i>
+          </button>
+        </div>
+
+        <div class="results-tabs-bar">
+          <button class="results-tab active" id="rtabPdf" onclick="switchTab('pdf')">
+            <i class="fas fa-file-pdf"></i> PDF Individual
+          </button>
+          <button class="results-tab" id="rtabFolder" onclick="switchTab('folder')">
+            <i class="fas fa-folder-open"></i> Carpeta de Documentos
+          </button>
+        </div>
+      </div>
+
+      <div id="panelContainerResults" class="results-action-area"></div>
+
+      <div class="results-body">
+        <div id="aiOverview" class="ai-overview" style="display:none">
+          <div class="ai-header">
+            <div class="ai-badge">
+              <i class="fas fa-robot"></i> <span>Respuesta IA</span>
+            </div>
+            <div class="ai-sparkle">✦</div>
+          </div>
+          <div id="aiTyping" class="ai-typing" style="display:none">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+        <div id="chatHistory" class="chat-history"></div>
+      </div>
+    </section>
+
+    <div id="previewModal" class="preview-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modalTitle">Vista Previa de Documento Técnico</h3>
+          <button class="close-modal" onclick="closePreview()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <iframe id="previewIframe" src="" width="100%" height="100%" style="border:none;"></iframe>
+        </div>
+      </div>
     </div>
-    <div class="modal-body">
-      <iframe id="previewIframe" src="" width="100%" height="100%" style="border:none;"></iframe>
-    </div>
+
+    <footer id="main-footer">
+      <div class="footer-country">
+        <span>México - Central Hidroeléctrica El Cajón</span>
+      </div>
+    </footer>
+
   </div>
 </div>
-
-<footer id="main-footer">
-  <div class="footer-country">
-    <span>México - Central Hidroeléctrica</span>
-  </div>
-</footer>
 
 <script>
 const API = "http://127.0.0.1:8001";
 let currentTab = "pdf";
+
+let activeConversationId = null;
+let conversationsCache = {};
 
 let pdfReady = false;
 let folderReady = false;
@@ -252,10 +425,89 @@ let chatMessages = {
   folder: []
 };
 
+// Cargar barra lateral en el inicio
+window.addEventListener("DOMContentLoaded", () => {
+  switchTab("pdf");
+  fetchConversations();
+});
+
+async function fetchConversations() {
+  try {
+    const res = await fetch(`${API}/conversations/`);
+    if (!res.ok) return;
+    conversationsCache = await res.json();
+    renderSidebar();
+  } catch (e) {
+    console.error("Error cargando historial de barra lateral", e);
+  }
+}
+
+function renderSidebar() {
+  const container = document.getElementById("sidebarHistoryList");
+  container.innerHTML = "";
+  
+  Object.values(conversationsCache).reverse().forEach(conv => {
+    const isSelected = conv.id === activeConversationId ? "active" : "";
+    const icon = conv.type === "pdf" ? "fa-file-pdf" : "fa-folder-open";
+    
+    // Crear contenedor de la tarjeta de conversación
+    const card = document.createElement("div");
+    card.className = `history-card ${isSelected}`;
+    card.id = `sidebar-card-${conv.id}`;
+    card.onclick = () => loadConversation(conv.id);
+
+    // Título de la conversación
+    const titleDiv = document.createElement("div");
+    titleDiv.className = "history-card-title";
+    titleDiv.innerHTML = `<i class="fas fa-comment-alt" style="color:#9aa0a6; font-size:12px;"></i> ${conv.title}`;
+    card.appendChild(titleDiv);
+
+    // Subtexto: Nombre del archivo/carpeta (Hacer clic activa Vista Previa)
+    const subtextDiv = document.createElement("div");
+    subtextDiv.className = "history-card-subtext";
+    subtextDiv.innerHTML = `<i class="fas ${icon}"></i> ${conv.target_name}`;
+    subtextDiv.onclick = (e) => {
+      e.stopPropagation(); // Evita cambiar la conversación seleccionada
+      if (conv.type === "pdf") {
+        openPreview(encodeURIComponent(conv.file_path), conv.target_name);
+      } else {
+        alert(`Directorio indexado del sistema: ${conv.file_path}`);
+      }
+    };
+    card.appendChild(subtextDiv);
+
+    container.appendChild(card);
+  });
+}
+
+async function loadConversation(id) {
+  activeConversationId = id;
+  const conv = conversationsCache[id];
+  if (!conv) return;
+
+  currentTab = conv.type;
+  chatMessages[currentTab] = conv.history;
+
+  if (conv.type === "pdf") {
+    pdfReady = true;
+    pdfLoadedName = conv.target_name;
+  } else {
+    folderReady = true;
+  }
+
+  showResultsView();
+  renderHistory();
+  refreshPdfBadge();
+  
+  // Refrescar estado activo en la UI
+  document.querySelectorAll(".history-card").forEach(el => el.classList.remove("active"));
+  const activeCard = document.getElementById(`sidebar-card-${id}`);
+  if (activeCard) activeCard.classList.add("active");
+}
+
 function switchTab(tab) {
   currentTab = tab;
   
-  // Detectar en qué interfaz visual nos encontramos para adjuntar los paneles
   const inResults = document.getElementById("results-view").style.display !== "none";
   const activeContainerId = inResults ? "panelContainerResults" : "panelContainerHome";
   const container = document.getElementById(activeContainerId);
@@ -268,11 +520,9 @@ function switchTab(tab) {
     container.appendChild(panelFolder);
   }
 
-  // Alternar visibilidad de los paneles de configuración
   panelPdf.style.display = tab === "pdf" ? "block" : "none";
   panelFolder.style.display = tab === "folder" ? "block" : "none";
 
-  // Sincronizar clases activas en los botones de pestañas de ambas vistas
   document.getElementById("tabPdf").classList.toggle("active", tab === "pdf");
   document.getElementById("tabFolder").classList.toggle("active", tab === "folder");
   document.getElementById("rtabPdf").classList.toggle("active", tab === "pdf");
@@ -313,8 +563,11 @@ async function processPdf() {
     if (res.ok) {
       pdfReady = true;
       pdfLoadedName = pdfFile.name;
+      activeConversationId = data.conversation_id;
       showStatus("pdfStatus", `✅ PDF procesado con éxito`, "ok");
-      refreshPdfBadge();
+      
+      await fetchConversations(); // Recargar barra lateral
+      await loadConversation(activeConversationId); // Forzar cambio de interfaz
     } else {
       showStatus("pdfStatus", `❌ ${data.error}`, "error");
     }
@@ -339,7 +592,11 @@ async function indexFolder() {
     const data = await res.json();
     if (res.ok) {
       folderReady = true;
-      showStatus("folderStatus", `✅ Indexación completada. Documentos: ${data.documents}`, "ok");
+      activeConversationId = data.conversation_id;
+      showStatus("folderStatus", `✅ Indexación completada.`, "ok");
+      
+      await fetchConversations();
+      await loadConversation(activeConversationId);
     } else {
       showStatus("folderStatus", `❌ ${data.error}`, "error");
     }
@@ -364,6 +621,12 @@ document.getElementById("searchInput").addEventListener("keydown", e => {
 });
 
 async function askQuestion(q) {
+  if (!activeConversationId) {
+    alert("❌ Sube un documento o selecciona una conversación del historial antes de preguntar.");
+    return;
+  }
+
+  // Render temporal local
   chatMessages[currentTab].push({ role: "user", content: q });
   renderHistory();
   scrollToBottom();
@@ -371,47 +634,34 @@ async function askQuestion(q) {
 
   const fd = new FormData();
   fd.append("question", q);
+  fd.append("conversation_id", activeConversationId);
 
   let endpoint;
   if (currentTab === "pdf") {
-    if (!pdfReady) {
-      receiveAnswer("❌ Primero sube y procesa un PDF técnico.", null);
-      return;
-    }
     const style = document.getElementById("styleSelect").value;
     fd.append("style", style);
     endpoint = `${API}/ask_pdf/`;
   } else {
-    if (!folderReady) {
-      receiveAnswer("❌ Primero proporciona e indexa una carpeta del sistema.", null);
-      return;
-    }
     endpoint = `${API}/ask_folder/`;
   }
 
   try {
     const res = await fetch(endpoint, { method: "POST", body: fd });
     const data = await res.json();
-    receiveAnswer(data.answer || "Sin respuesta del modelo", data.sources || null);
+    
+    hideTyping();
+    // Actualizar cache local y volver a pintar
+    await fetchConversations();
+    await loadConversation(activeConversationId);
   } catch {
-    receiveAnswer("❌ Error crítico: No se pudo establecer conexión con la API.", null);
+    hideTyping();
+    alert("❌ Error crítico: No se pudo establecer conexión con la API.");
   }
-}
-
-function receiveAnswer(text, sources) {
-  hideTyping();
-  chatMessages[currentTab].push({
-    role: "assistant",
-    content: text,
-    sources: sources
-  });
-  renderHistory();
-  scrollToBottom();
 }
 
 function renderHistory() {
   const container = document.getElementById("chatHistory");
-  const msgs = chatMessages[currentTab];
+  const msgs = chatMessages[currentTab] || [];
 
   container.innerHTML = msgs.map(m => `
     <div class="chat-bubble ${m.role}">
@@ -449,12 +699,9 @@ function showResultsView() {
   document.getElementById("main-view").style.display = "none";
   document.getElementById("main-footer").style.display = "none";
   document.getElementById("results-view").style.display = "block";
-  switchTab(currentTab); // Forzar reubicación de controles a panelContainerResults
+  switchTab(currentTab);
 }
 
-// ==========================================================
-// OPERACIONES DE VISTA PREVIA (MODAL IFRAME NATIVO)
-// ==========================================================
 function openPreview(encodedPath, fileName) {
   const path = decodeURIComponent(encodedPath);
   document.getElementById("modalTitle").textContent = `Vista Previa Completa: ${fileName}`;
@@ -467,87 +714,45 @@ function closePreview() {
   document.getElementById("previewIframe").src = "";
 }
 
-// ==========================================================
-// VOLVER AL INICIO CON LIMPIEZA ABSOLUTA (FRONTEND + BACKEND)
-// ==========================================================
 async function backToHome() {
-  // 1. Mostrar estado de purga en los badges de carga
-  showStatus("pdfStatus", "⏳ Purgando memoria del servidor...", "info");
-  showStatus("folderStatus", "⏳ Eliminando índices vectoriales...", "info");
-
-  // 2. Limpieza en base de datos e índices locales del servidor
-  try {
-    await fetch(`${API}/clear_index/`, { method: "POST" });
-  } catch (e) {
-    print("⚠️ No se pudo purgar el almacenamiento en disco del backend.");
-  }
-
-  // 3. Resetear todos los estados lógicos del Frontend
-  chatMessages.pdf = [];
-  chatMessages.folder = [];
+  activeConversationId = null;
   pdfReady = false;
   folderReady = false;
   pdfFile = null;
   pdfLoadedName = "";
 
-  // 4. Limpiar casillas de selección e inputs de texto
   document.getElementById("pdfFileInput").value = "";
   document.getElementById("pdfFileName").textContent = "Sin archivo";
   document.getElementById("folderPathInput").value = "";
   document.getElementById("searchInput").value = "";
   document.getElementById("searchInputResults").value = "";
 
-  // Ocultar estados e insignias activas
   document.getElementById("pdfStatus").style.display = "none";
   document.getElementById("folderStatus").style.display = "none";
   document.getElementById("pdfActiveBadge").style.display = "none";
 
-  // 5. Redirección visual a la pantalla principal de Google
   document.getElementById("main-view").style.display = "flex";
   document.getElementById("main-footer").style.display = "block";
   document.getElementById("results-view").style.display = "none";
 
-  // Re-adjuntar paneles al contenedor Home de la pantalla principal
-  switchTab(currentTab);
+  document.querySelectorAll(".history-card").forEach(el => el.classList.remove("active"));
+  switchTab("pdf");
+  fetchConversations();
 }
 
-// ==========================================================
-// OPERACIONES DE LIMPIEZA INDIVIDUAL INDEPENDIENTES
-// ==========================================================
 async function clearPdfChat() {
-  document.getElementById("pdfFileInput").value = "";
-  document.getElementById("pdfFileName").textContent = "Sin archivo";
-  chatMessages.pdf = [];
-  pdfReady = false;
-  pdfFile = null;
-  pdfLoadedName = "";
-  
-  renderHistory();
-  refreshPdfBadge();
-  showStatus("pdfStatus", "⏳ Purgando almacenamiento del servidor...", "info");
-
-  try {
-    await fetch(`${API}/clear_index/`, { method: "POST" });
-    showStatus("pdfStatus", "🧹 Campos y memoria de PDFs limpiados por completo.", "info");
-  } catch {
-    showStatus("pdfStatus", "⚠️ Frontend limpio, pero falló comunicación backend.", "warn");
+  if(confirm("¿Seguro que deseas purgar la base de datos del servidor por completo?")) {
+    try {
+      await fetch(`${API}/clear_index/`, { method: "POST" });
+      backToHome();
+    } catch {
+      alert("Error limpiando el backend");
+    }
   }
 }
 
 async function clearIndex() {
-  document.getElementById("folderPathInput").value = "";
-  chatMessages.folder = [];
-  folderReady = false;
-  
-  renderHistory();
-  showStatus("folderStatus", "⏳ Eliminando índices vectoriales del sistema...", "info");
-
-  try {
-    await fetch(`${API}/clear_index/`, { method: "POST" });
-    showStatus("folderStatus", "🧹 Índices masivos y campos borrados de raíz.", "info");
-  } catch {
-    showStatus("folderStatus", "⚠️ Campos reseteados, pero falló la purga en disco del backend.", "warn");
-  }
+  await clearPdfChat();
 }
 
 function showStatus(id, msg, type) {
@@ -565,11 +770,6 @@ function scrollToBottom() {
     });
   }, 50);
 }
-
-// Inicializar y enlazar los paneles correctamente al iniciar la aplicación
-window.addEventListener("DOMContentLoaded", () => {
-  switchTab("pdf");
-});
 </script>
 </body>
 </html>

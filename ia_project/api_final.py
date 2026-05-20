@@ -16,13 +16,14 @@ import shutil
 import fitz  # PyMuPDF
 import base64
 import asyncio
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI(title="CFE Intelligent Document & Vision API", version="3.0")
+app = FastAPI(title="CFE Intelligent Document & Vision API", version="4.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,18 +38,18 @@ if not GROQ_API_KEY:
     raise ValueError("⛔ GROQ_API_KEY no encontrada en el archivo .env")
 
 # ==========================================================
-# CONFIGURACIÓN DE MODELOS
+# CONFIGURACIÓN DE MODELOS Y RUTAS PERSISTENTES
 # ==========================================================
 VISION_MODEL = "llama-3.2-90b-vision-instruct"
 TEXT_MODEL   = "llama-3.3-70b-versatile"
 
-MAX_DOCUMENTS    = 100
-PDF_INDEX_PATH   = "pdf_index"
-FOLDER_INDEX_PATH = "folder_index"
-UPLOAD_DIR       = "uploaded_pdfs"
+MAX_DOCUMENTS       = 100
+UPLOAD_DIR          = "uploaded_pdfs"
+INDICES_BASE_DIR    = "stored_conversations"
+METADATA_FILE       = os.path.join(INDICES_BASE_DIR, "conversations.json")
 
-# Asegurar existencia del directorio de carga persistente para vistas previas
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(INDICES_BASE_DIR, exist_ok=True)
 
 # ── Embeddings ──
 embeddings = HuggingFaceEmbeddings(
@@ -60,25 +61,23 @@ embeddings = HuggingFaceEmbeddings(
 # ── Pool de hilos ──
 MAX_WORKERS = min(8, (os.cpu_count() or 4) * 2)
 _executor   = ThreadPoolExecutor(max_workers=MAX_WORKERS)
-
 GROQ_CONCURRENCY = 6
 
-pdf_vectorstore    = None
-folder_vectorstore = None
-
-# ── Carga de índices al inicio ──
-for index_path, label in [(PDF_INDEX_PATH, "PDF"), (FOLDER_INDEX_PATH, "carpetas")]:
-    if os.path.exists(index_path):
+# ==========================================================
+# GESTIÓN DE METADATOS DE CONVERSACIONES
+# ==========================================================
+def load_metadata() -> dict:
+    if os.path.exists(METADATA_FILE):
         try:
-            store = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-            if index_path == PDF_INDEX_PATH:
-                pdf_vectorstore = store
-            else:
-                folder_vectorstore = store
-            print(f"✅ Índice de {label} cargado desde disco.")
-        except Exception as e:
-            print(f"⚠️ No se pudo cargar índice de {label}: {e}")
+            with open(METADATA_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
 
+def save_metadata(meta: dict):
+    with open(METADATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=4)
 
 # ==========================================================
 # EXTRACCIÓN RÁPIDA DE PÁGINAS PDF
@@ -108,10 +107,6 @@ def _extract_pages_data(file_path: str) -> list[dict]:
             })
     return pages_data
 
-
-# ==========================================================
-# ANÁLISIS CON VISIÓN
-# ==========================================================
 def _analyze_page(page_data: dict) -> Document:
     content = (
         f"ARCHIVO: {page_data['file_name']}\n"
@@ -149,10 +144,6 @@ def _analyze_page(page_data: dict) -> Document:
         metadata={"source": page_data["file_path"], "page": page_data["page_num"] + 1},
     )
 
-
-# ==========================================================
-# PIPELINE PRINCIPAL DE EXTRACCIÓN
-# ==========================================================
 def extract_pdf_parallel(file_path: str) -> list[Document]:
     pages_data = _extract_pages_data(file_path)
     documents = [None] * len(pages_data)
@@ -178,7 +169,6 @@ def extract_pdf_parallel(file_path: str) -> list[Document]:
 
     return [doc for doc in documents if doc is not None]
 
-
 def _process_single_pdf(file_path: str) -> list[Document]:
     try:
         return extract_pdf_parallel(file_path)
@@ -186,44 +176,139 @@ def _process_single_pdf(file_path: str) -> list[Document]:
         print(f"⚠️ Omitiendo {os.path.basename(file_path)}: {e}")
         return []
 
+# ==========================================================
+# ENDPOINTS DE CONTROL DE CONVERSACIÓN
+# ==========================================================
+@app.get("/conversations/")
+async def list_conversations():
+    return load_metadata()
+
+@app.get("/conversations/{conversation_id}")
+async def get_conversation(conversation_id: str):
+    meta = load_metadata()
+    if conversation_id not in meta:
+        return JSONResponse(status_code=404, content={"error": "Conversación no encontrada"})
+    return meta[conversation_id]
 
 # ==========================================================
-# ENDPOINTS: PDF INDIVIDUAL
+# ENDPOINTS: PROCESAMIENTO E INDEXACIÓN
 # ==========================================================
 @app.post("/upload_pdf/")
 async def upload_pdf(file: UploadFile = File(...)):
-    global pdf_vectorstore
     try:
-        # Guardar en ruta controlada persistente para visualización nativa
         file_path = os.path.join(UPLOAD_DIR, file.filename)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
         loop = asyncio.get_event_loop()
-        raw_docs = await loop.run_in_executor(
-            _executor, partial(extract_pdf_parallel, file_path)
-        )
+        raw_docs = await loop.run_in_executor(_executor, partial(extract_pdf_parallel, file_path))
 
         splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
         docs = splitter.split_documents(raw_docs)
 
+        # Crear Sesión y Guardar Base de Vectores propia
+        meta = load_metadata()
+        conv_idx = len(meta) + 1
+        conv_id = f"conversacion_{conv_idx}"
+        conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
+
         pdf_vectorstore = FAISS.from_documents(docs, embeddings)
-        pdf_vectorstore.save_local(PDF_INDEX_PATH)
+        pdf_vectorstore.save_local(conv_dir)
+
+        meta[conv_id] = {
+            "id": conv_id,
+            "title": f"Conversación {conv_idx}",
+            "type": "pdf",
+            "target_name": file.filename,
+            "file_path": file_path,
+            "history": []
+        }
+        save_metadata(meta)
 
         return {
+            "conversation_id": conv_id,
             "message": "✅ PDF procesado e indexado correctamente.",
             "pages":   len(raw_docs),
-            "chunks":  len(docs),
+            "chunks":  len(docs)
         }
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+@app.post("/index_folder/")
+async def index_folder(folder_path: str = Form(...)):
+    if not os.path.exists(folder_path):
+        return JSONResponse(status_code=400, content={"error": "La ruta especificada no existe."})
 
+    try:
+        pdf_files = [
+            os.path.join(root, f)
+            for root, _, files in os.walk(folder_path)
+            for f in files
+            if f.lower().endswith(".pdf")
+        ]
+
+        if not pdf_files:
+            return JSONResponse(status_code=400, content={"error": "No se encontraron archivos PDF."})
+        if len(pdf_files) > MAX_DOCUMENTS:
+            return JSONResponse(status_code=400, content={"error": f"Límite excedido: máximo {MAX_DOCUMENTS} PDFs."})
+
+        loop = asyncio.get_event_loop()
+        futures = [loop.run_in_executor(_executor, _process_single_pdf, fp) for fp in pdf_files]
+        results = await asyncio.gather(*futures, return_exceptions=True)
+
+        all_docs = []
+        for r in results:
+            if isinstance(r, list):
+                all_docs.extend(r)
+
+        if not all_docs:
+            return JSONResponse(status_code=500, content={"error": "No se pudo extraer contenido."})
+
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1800, chunk_overlap=200)
+        docs     = splitter.split_documents(all_docs)
+
+        # Guardar Base de Vectores Dedicada
+        meta = load_metadata()
+        conv_idx = len(meta) + 1
+        conv_id = f"conversacion_{conv_idx}"
+        conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
+
+        folder_vectorstore = FAISS.from_documents(docs, embeddings)
+        folder_vectorstore.save_local(conv_dir)
+
+        folder_display_name = os.path.basename(os.path.normpath(folder_path)) or folder_path
+        meta[conv_id] = {
+            "id": conv_id,
+            "title": f"Conversación {conv_idx}",
+            "type": "folder",
+            "target_name": folder_display_name,
+            "file_path": folder_path,
+            "history": []
+        }
+        save_metadata(meta)
+
+        return {
+            "conversation_id": conv_id,
+            "message":   "✅ Indexación recursiva completada.",
+            "documents": len(pdf_files)
+        }
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+# ==========================================================
+# ENDPOINTS: CONSULTAS (RAG)
+# ==========================================================
 @app.post("/ask_pdf/")
-async def ask_pdf(question: str = Form(...), style: str = Form("normal")):
-    global pdf_vectorstore
-    if pdf_vectorstore is None:
-        return {"answer": "❌ Primero sube y procesa un PDF"}
+async def ask_pdf(question: str = Form(...), style: str = Form("normal"), conversation_id: str = Form(...)):
+    meta = load_metadata()
+    if conversation_id not in meta:
+        return JSONResponse(status_code=404, content={"error": "ID de conversación no válido."})
+
+    conv_dir = os.path.join(INDICES_BASE_DIR, conversation_id)
+    try:
+        local_store = FAISS.load_local(conv_dir, embeddings, allow_dangerous_deserialization=True)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Error al cargar el índice: {e}"})
 
     style_map = {
         "normal":    "Eres un analista documental experto de CFE. Responde de forma profesional basándote en el texto y planos analizados.",
@@ -247,7 +332,7 @@ Respuesta:"""
     prompt = PromptTemplate(template=template, input_variables=["context", "question"])
     chain  = RetrievalQA.from_chain_type(
         llm=ChatGroq(model=TEXT_MODEL, api_key=GROQ_API_KEY, temperature=0.2),
-        retriever=pdf_vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 5}),
+        retriever=local_store.as_retriever(search_type="mmr", search_kwargs={"k": 5}),
         return_source_documents=True,
         chain_type_kwargs={"prompt": prompt},
     )
@@ -256,72 +341,24 @@ Respuesta:"""
     result = await loop.run_in_executor(_executor, partial(chain.invoke, {"query": question}))
     sources = sorted(set(d.metadata["source"] for d in result["source_documents"]))
 
-    return {
-        "answer": result["result"],
-        "sources": sources
-    }
+    # Registrar en el Historial del JSON
+    meta[conversation_id]["history"].append({"role": "user", "content": question})
+    meta[conversation_id]["history"].append({"role": "assistant", "content": result["result"], "sources": sources})
+    save_metadata(meta)
 
-
-# ==========================================================
-# ENDPOINTS: CARPETAS MASIVAS
-# ==========================================================
-@app.post("/index_folder/")
-async def index_folder(folder_path: str = Form(...)):
-    global folder_vectorstore
-    if not os.path.exists(folder_path):
-        return JSONResponse(status_code=400, content={"error": "La ruta especificada no existe en el servidor."})
-
-    try:
-        pdf_files = [
-            os.path.join(root, f)
-            for root, _, files in os.walk(folder_path)
-            for f in files
-            if f.lower().endswith(".pdf")
-        ]
-
-        if not pdf_files:
-            return JSONResponse(status_code=400, content={"error": "No se encontraron archivos PDF."})
-        if len(pdf_files) > MAX_DOCUMENTS:
-            return JSONResponse(status_code=400, content={"error": f"Límite excedido: máximo {MAX_DOCUMENTS} PDFs."})
-
-        loop = asyncio.get_event_loop()
-
-        futures = [
-            loop.run_in_executor(_executor, _process_single_pdf, fp)
-            for fp in pdf_files
-        ]
-        results = await asyncio.gather(*futures, return_exceptions=True)
-
-        all_docs = []
-        for r in results:
-            if isinstance(r, list):
-                all_docs.extend(r)
-
-        if not all_docs:
-            return JSONResponse(status_code=500, content={"error": "No se pudo extraer contenido de los PDFs."})
-
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1800, chunk_overlap=200)
-        docs     = splitter.split_documents(all_docs)
-
-        folder_vectorstore = FAISS.from_documents(docs, embeddings)
-        folder_vectorstore.save_local(FOLDER_INDEX_PATH)
-
-        unique_files = sorted(set(os.path.basename(d.metadata["source"]) for d in all_docs))
-        return {
-            "message":   "✅ Indexación recursiva completada.",
-            "documents": len(unique_files),
-            "chunks":    len(docs),
-            "files":     unique_files,
-        }
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
+    return {"answer": result["result"], "sources": sources}
 
 @app.post("/ask_folder/")
-async def ask_folder(question: str = Form(...)):
-    global folder_vectorstore
-    if folder_vectorstore is None:
-        return {"answer": "❌ Primero indexa una carpeta desde el panel técnico"}
+async def ask_folder(question: str = Form(...), conversation_id: str = Form(...)):
+    meta = load_metadata()
+    if conversation_id not in meta:
+        return JSONResponse(status_code=404, content={"error": "ID de conversación no válido."})
+
+    conv_dir = os.path.join(INDICES_BASE_DIR, conversation_id)
+    try:
+        local_store = FAISS.load_local(conv_dir, embeddings, allow_dangerous_deserialization=True)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Error al cargar el índice: {e}"})
 
     template = """Eres un Ingeniero Analista del Sistema de Información CFE El Cajón.
 Usa los fragmentos de contexto (texto e interpretaciones de planos por visión) para responder
@@ -338,7 +375,7 @@ Respuesta:"""
     prompt = PromptTemplate(template=template, input_variables=["context", "question"])
     chain  = RetrievalQA.from_chain_type(
         llm=ChatGroq(model=TEXT_MODEL, api_key=GROQ_API_KEY, temperature=0.0),
-        retriever=folder_vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 8}),
+        retriever=local_store.as_retriever(search_type="mmr", search_kwargs={"k": 8}),
         return_source_documents=True,
         chain_type_kwargs={"prompt": prompt},
     )
@@ -347,32 +384,27 @@ Respuesta:"""
     result = await loop.run_in_executor(_executor, partial(chain.invoke, {"query": question}))
     sources = sorted(set(d.metadata["source"] for d in result["source_documents"]))
 
-    return {
-        "answer":  result["result"],
-        "sources": sources,
-    }
+    meta[conversation_id]["history"].append({"role": "user", "content": question})
+    meta[conversation_id]["history"].append({"role": "assistant", "content": result["result"], "sources": sources})
+    save_metadata(meta)
 
+    return {"answer": result["result"], "sources": sources}
 
 # ==========================================================
 # ENDPOINT DE VISTA PREVIA DE DOCUMENTOS
 # ==========================================================
 @app.get("/preview/")
 async def preview_file(path: str):
-    """Retorna el archivo PDF de manera nativa para renderizado en iframe/visor."""
     if not os.path.exists(path):
         return JSONResponse(status_code=404, content={"error": f"Archivo no encontrado en la ruta: {path}"})
     return FileResponse(path, media_type="application/pdf")
 
-
 # ==========================================================
-# CONTROL Y LIMPIEZA
+# CONTROL Y LIMPIEZA TOTAL
 # ==========================================================
 @app.post("/clear_index/")
 async def clear_index():
-    global pdf_vectorstore, folder_vectorstore
-    pdf_vectorstore = folder_vectorstore = None
-
-    for path in (PDF_INDEX_PATH, FOLDER_INDEX_PATH, UPLOAD_DIR):
+    for path in (UPLOAD_DIR, INDICES_BASE_DIR):
         if os.path.exists(path):
             try:
                 shutil.rmtree(path)
@@ -380,22 +412,19 @@ async def clear_index():
                 print(f"⚠️ Error al limpiar ruta {path}: {e}")
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
+    os.makedirs(INDICES_BASE_DIR, exist_ok=True)
     return {"message": "✅ Índices de memoria, disco y archivos cargados eliminados."}
-
 
 @app.get("/health")
 async def health():
+    meta = load_metadata()
     return {
-        "pdf_ready":      pdf_vectorstore is not None,
-        "folder_ready":   folder_vectorstore is not None,
+        "active_conversations": len(meta),
         "max_documents":  MAX_DOCUMENTS,
         "vision_model":   VISION_MODEL,
         "text_model":     TEXT_MODEL,
-        "embeddings":     "intfloat/multilingual-e5-small",
         "workers":        MAX_WORKERS,
-        "groq_concurrency": GROQ_CONCURRENCY,
     }
-
 
 if __name__ == "__main__":
     import uvicorn
