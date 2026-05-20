@@ -3,11 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Google - CFE Intelligent Search</title>
+  <title>CFE Intelligent Search</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
   <link rel="stylesheet" href="styles.css" />
   <style>
-    /* REESTRUCTURACIÓN DE DISEÑO DE APP CON SIDEBAR ESTILO GEMINI */
+    /* ═══════════════════════════════════════════════
+       LAYOUT PRINCIPAL
+    ═══════════════════════════════════════════════ */
     body {
       margin: 0;
       padding: 0;
@@ -17,16 +19,19 @@
       overflow: hidden;
       background-color: #ffffff;
     }
-    
+
     .app-container {
       display: flex;
       width: 100%;
       height: 100vh;
     }
 
-    /* ESTILOS DE LA BARRA LATERAL (DARK THEME) */
+    /* ═══════════════════════════════════════════════
+       BARRA LATERAL — con soporte de colapso
+    ═══════════════════════════════════════════════ */
     .sidebar {
       width: 280px;
+      min-width: 280px;
       background-color: #131314;
       color: #e3e3e3;
       display: flex;
@@ -36,8 +41,20 @@
       border-right: 1px solid #303134;
       flex-shrink: 0;
       overflow-y: auto;
+      overflow-x: hidden;
+      /* Transición suave al contraer/expandir */
+      transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease, border 0.3s ease;
     }
-    
+
+    /* Estado colapsado */
+    .sidebar.collapsed {
+      width: 0;
+      min-width: 0;
+      padding: 0;
+      overflow: hidden;
+      border-right: none;
+    }
+
     .sidebar-header {
       font-size: 18px;
       font-weight: 500;
@@ -47,9 +64,21 @@
       display: flex;
       align-items: center;
       gap: 10px;
+      white-space: nowrap;
     }
-    .sidebar-header i {
-      color: #4285f4;
+
+    /*
+    ══════════════════════════════════════════════════
+    LOGO CFE OFICIAL — Pega la URL del logo aquí:
+    Reemplaza "URL_LOGO_CFE_AQUI" en el atributo src
+    del <img> dentro de .sidebar-header (línea ~165 HTML)
+    ══════════════════════════════════════════════════
+    */
+    .cfe-logo-img {
+      width: 34px;
+      height: 34px;
+      object-fit: contain;
+      flex-shrink: 0;
     }
 
     .new-chat-btn {
@@ -67,10 +96,9 @@
       margin-bottom: 24px;
       font-weight: 500;
       transition: background 0.2s;
+      white-space: nowrap;
     }
-    .new-chat-btn:hover {
-      background: #2b2b2c;
-    }
+    .new-chat-btn:hover { background: #2b2b2c; }
 
     .sidebar-menu-item {
       padding: 10px 12px;
@@ -82,6 +110,7 @@
       gap: 12px;
       color: #c4c7c5;
       margin-bottom: 4px;
+      white-space: nowrap;
     }
     .sidebar-menu-item:hover {
       background: #1e1e1f;
@@ -95,6 +124,7 @@
       color: #7c7f82;
       margin: 20px 0 10px 8px;
       letter-spacing: 0.5px;
+      white-space: nowrap;
     }
 
     .history-list {
@@ -113,10 +143,9 @@
       flex-direction: column;
       gap: 4px;
     }
-    .history-card:hover, .history-card.active {
-      background: #1e1e1f;
-    }
-    
+    .history-card:hover,
+    .history-card.active { background: #1e1e1f; }
+
     .history-card-title {
       font-size: 14px;
       color: #e3e3e3;
@@ -146,7 +175,9 @@
       text-decoration: underline;
     }
 
-    /* CONTENEDOR PRINCIPAL */
+    /* ═══════════════════════════════════════════════
+       CONTENEDOR PRINCIPAL
+    ═══════════════════════════════════════════════ */
     .main-app-content {
       flex: 1;
       display: flex;
@@ -154,16 +185,143 @@
       height: 100vh;
       overflow-y: auto;
       position: relative;
+      min-width: 0;
     }
 
-    /* Estilos del modal para Vista Previa de Documentos Técnicos CFE */
+    /* ═══════════════════════════════════════════════
+       BOTÓN HAMBURGUESA (contraer / expandir sidebar)
+    ═══════════════════════════════════════════════ */
+    .hamburger-btn {
+      background: none;
+      border: none;
+      color: #5f6368;
+      font-size: 18px;
+      cursor: pointer;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .hamburger-btn:hover { background: rgba(60,64,67,.08); }
+
+    /* ═══════════════════════════════════════════════
+       HERO — CARRUSEL DE IMÁGENES DE LA CENTRAL
+    ═══════════════════════════════════════════════ */
+    .hero-carousel-section {
+      width: 100%;
+      height: 260px;
+      position: relative;
+      overflow: hidden;
+      background: #ebebeb;
+      flex-shrink: 0;
+    }
+
+    .hero-slides-wrapper {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* Cada slide se genera dinámicamente por JS */
+    .hero-slide {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      opacity: 0;
+      transform: translateX(100%);
+      transition: transform 0.85s cubic-bezier(0.4, 0, 0.2, 1),
+                  opacity  0.85s ease;
+    }
+    .hero-slide.active {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .hero-slide.exiting {
+      opacity: 0;
+      transform: translateX(-100%);
+    }
+
+    /* Texto placeholder "Libro final" — visible hasta que se carguen imágenes */
+    .hero-placeholder-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 54px;
+      font-weight: 300;
+      color: #b5b5b5;
+      letter-spacing: 3px;
+      pointer-events: none;
+      user-select: none;
+      font-family: 'Google Sans', Arial, sans-serif;
+      z-index: 2;
+      white-space: nowrap;
+    }
+
+    /* Indicadores puntitos del carrusel */
+    .hero-indicators {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 3;
+    }
+    .hero-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.45);
+      cursor: pointer;
+      transition: background 0.3s, transform 0.3s;
+      border: 1px solid rgba(0,0,0,0.15);
+    }
+    .hero-dot.active {
+      background: rgba(255,255,255,0.95);
+      transform: scale(1.35);
+    }
+
+    /* ═══════════════════════════════════════════════
+       ÁREA DE BÚSQUEDA (wrapper con padding)
+    ═══════════════════════════════════════════════ */
+    .search-area-wrapper {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      padding: 28px 20px 10px;
+      box-sizing: border-box;
+    }
+
+    /* ═══════════════════════════════════════════════
+       SECCIÓN BORROSA — espejo sincronizado del carrusel
+    ═══════════════════════════════════════════════ */
+    .blurred-mirror-section {
+      width: 100%;
+      flex: 1;
+      min-height: 80px;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-color: #e0e0e0;
+      filter: blur(24px) brightness(0.60);
+      transform: scale(1.12); /* evita bordes blancos del blur */
+      transition: background-image 0.85s ease;
+    }
+
+    /* ═══════════════════════════════════════════════
+       MODAL
+    ═══════════════════════════════════════════════ */
     .preview-modal {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(0, 0, 0, 0.6);
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.6);
       display: none;
       justify-content: center;
       align-items: center;
@@ -171,13 +329,12 @@
     }
     .modal-content {
       background: #ffffff;
-      width: 90%;
-      height: 90%;
+      width: 90%; height: 90%;
       border-radius: 8px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
     }
     .modal-header {
       background: #f1f3f4;
@@ -200,13 +357,9 @@
       cursor: pointer;
       color: #5f6368;
     }
-    .close-modal:hover {
-      color: #000000;
-    }
-    .modal-body {
-      flex: 1;
-      background: #525659;
-    }
+    .close-modal:hover { color: #000000; }
+    .modal-body { flex: 1; background: #525659; }
+
     .source-btn {
       background: #f1f3f4;
       border: 1px solid #dadce0;
@@ -222,9 +375,8 @@
       font-weight: bold;
       transition: background 0.2s;
     }
-    .source-btn:hover {
-      background: #e8f0fe;
-    }
+    .source-btn:hover { background: #e8f0fe; }
+
     .panel-container {
       width: 100%;
       margin-bottom: 15px;
@@ -239,107 +391,167 @@
 <body>
 
 <div class="app-container">
-  
-  <aside class="sidebar">
+
+  <!-- ═══════════════════════════════════════════
+       BARRA LATERAL
+  ═══════════════════════════════════════════ -->
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <i class="fas fa-layer-group"></i> <span>CFE Intelligent</span>
+      <!--
+        ╔═══════════════════════════════════════════╗
+        ║  LOGO CFE OFICIAL                         ║
+        ║  Reemplaza "URL_LOGO_CFE_AQUI" con la URL ║
+        ║  real del logo de CFE (PNG o SVG).         ║
+        ╚═══════════════════════════════════════════╝
+      -->
+      <img
+        src="logo.png"
+        alt="Logo CFE"
+        class="cfe-logo-img"
+        onerror="this.style.display='none'; document.getElementById('cfe-icon-fallback').style.display='inline-block';"
+      />
+      <!-- Ícono de respaldo mientras no hay logo real -->
+      <i class="fas fa-layer-group" id="cfe-icon-fallback" style="color:#4285f4; display:none;"></i>
+      <span>CFE Intelligent</span>
     </div>
-    <button class="new-chat-btn" onclick="backToHome()"><i class="fas fa-plus"></i> Nueva conversación</button>
-    
+
+    <button class="new-chat-btn" onclick="backToHome()">
+      <i class="fas fa-plus"></i> Nueva conversación
+    </button>
+
     <div class="sidebar-menu-item"><i class="fas fa-search"></i> Buscar conversaciones</div>
     <div class="sidebar-menu-item"><i class="fas fa-book-bookmark"></i> Biblioteca</div>
-    
+
     <div class="sidebar-section-title">Recientes</div>
-    <div class="history-list" id="sidebarHistoryList">
-      </div>
+    <div class="history-list" id="sidebarHistoryList"></div>
   </aside>
 
+  <!-- ═══════════════════════════════════════════
+       CONTENIDO PRINCIPAL
+  ═══════════════════════════════════════════ -->
   <div class="main-app-content">
-    
+
     <header>
+      <!-- Botón hamburguesa para contraer / expandir la barra lateral -->
+      <div class="header-left">
+        <button class="hamburger-btn" onclick="toggleSidebar()" title="Contraer / expandir menú">
+          <i class="fas fa-bars"></i>
+        </button>
+      </div>
       <div class="header-links">
         <a href="#">Gmail</a>
         <a href="#">Imágenes</a>
-        <div class="apps-icon">
-          <i class="fas fa-th"></i>
-        </div>
+        <div class="apps-icon"><i class="fas fa-th"></i></div>
         <div class="user-profile">M</div>
       </div>
     </header>
 
+    <!-- ═════════════════════════════════════════
+         VISTA PRINCIPAL (HOME)
+    ═════════════════════════════════════════ -->
     <main id="main-view">
-      <div class="logo-container">
-        <div class="logo">
-          <span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span>
+
+      <!-- ─────────────────────────────────────
+           CARRUSEL HERO — Imágenes de la central
+           Las URLs se configuran en el array
+           CAROUSEL_IMAGES dentro del <script>
+      ───────────────────────────────────────── -->
+      <div class="hero-carousel-section" id="heroCarouselSection">
+        <!-- Los slides se insertan por JavaScript -->
+        <div class="hero-slides-wrapper" id="heroSlidesWrapper"></div>
+
+        <!-- Texto placeholder: visible hasta que se asignen imágenes reales -->
+        <div class="hero-placeholder-text" id="heroPlaceholder">Libro final</div>
+
+        <!-- Indicadores (puntitos) -->
+        <div class="hero-indicators" id="heroIndicators"></div>
+      </div>
+
+      <!-- Área de búsqueda -->
+      <div class="search-area-wrapper">
+        <div class="search-container">
+          <div class="search-box">
+            <i class="fas fa-search search-icon"></i>
+            <input
+              type="text"
+              class="search-input"
+              id="searchInput"
+              placeholder="Buscar o hacer una pregunta técnica..."
+            />
+            <div class="search-icons">
+              <i class="fas fa-microphone microphone-icon"></i>
+              <i class="fas fa-camera camera-icon"></i>
+            </div>
+          </div>
+
+          <div class="mode-tabs">
+            <button class="mode-tab active" id="tabPdf" onclick="switchTab('pdf')">
+              <i class="fas fa-file-pdf"></i> PDF Individual
+            </button>
+            <button class="mode-tab" id="tabFolder" onclick="switchTab('folder')">
+              <i class="fas fa-folder-open"></i> Carpeta de Documentos
+            </button>
+          </div>
+
+          <div id="panelContainerHome" class="panel-container">
+            <div id="panelPdf" class="action-panel">
+              <div class="action-row">
+                <label class="upload-label" for="pdfFileInput">
+                  <i class="fas fa-upload"></i> Subir PDF
+                  <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="onPdfSelected()" />
+                </label>
+                <span id="pdfFileName" class="filename-hint">Sin archivo</span>
+
+                <select id="styleSelect" class="style-select">
+                  <option value="normal">Estilo: Normal</option>
+                  <option value="amable">Estilo: Amable</option>
+                  <option value="agresivo">Estilo: Directo</option>
+                </select>
+
+                <button class="action-btn primary-btn" onclick="processPdf()">
+                  <i class="fas fa-cogs"></i> Procesar PDF
+                </button>
+                <button class="action-btn ghost-btn" onclick="clearPdfChat()">
+                  <i class="fas fa-trash"></i> Limpiar
+                </button>
+              </div>
+              <div id="pdfStatus" class="status-badge" style="display:none"></div>
+              <div id="pdfActiveBadge" class="status-badge status-ok" style="display:none"></div>
+            </div>
+
+            <div id="panelFolder" class="action-panel" style="display:none">
+              <div class="action-row">
+                <input type="text" id="folderPathInput" class="folder-path-input" placeholder="Ruta del directorio en el servidor..." />
+                <button class="action-btn primary-btn" onclick="indexFolder()">
+                  <i class="fas fa-database"></i> Indexar Carpeta
+                </button>
+                <button class="action-btn ghost-btn" onclick="clearIndex()">
+                  <i class="fas fa-trash-alt"></i> Eliminar Índice
+                </button>
+              </div>
+              <div id="folderStatus" class="status-badge" style="display:none"></div>
+            </div>
+          </div>
+
+          <div class="search-buttons">
+            <button class="search-btn" onclick="doSearch()">Buscar con Google Engine</button>
+            <button class="search-btn">Me siento con suerte</button>
+          </div>
         </div>
       </div>
 
-      <div class="search-container">
-        <div class="search-box">
-          <i class="fas fa-search search-icon"></i>
-          <input type="text" class="search-input" id="searchInput" placeholder="Buscar o hacer una pregunta técnica..." />
-          <div class="search-icons">
-            <i class="fas fa-microphone microphone-icon"></i>
-            <i class="fas fa-camera camera-icon"></i>
-          </div>
-        </div>
+      <!-- ─────────────────────────────────────
+           SECCIÓN BORROSA
+           Espejo del carrusel de arriba, con blur.
+           Se sincroniza automáticamente con JS.
+      ───────────────────────────────────────── -->
+      <div class="blurred-mirror-section" id="blurredMirror"></div>
 
-        <div class="mode-tabs">
-          <button class="mode-tab active" id="tabPdf" onclick="switchTab('pdf')">
-            <i class="fas fa-file-pdf"></i> PDF Individual
-          </button>
-          <button class="mode-tab" id="tabFolder" onclick="switchTab('folder')">
-            <i class="fas fa-folder-open"></i> Carpeta de Documentos
-          </button>
-        </div>
-
-        <div id="panelContainerHome" class="panel-container">
-          <div id="panelPdf" class="action-panel">
-            <div class="action-row">
-              <label class="upload-label" for="pdfFileInput">
-                <i class="fas fa-upload"></i> Subir PDF
-                <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="onPdfSelected()" />
-              </label>
-              <span id="pdfFileName" class="filename-hint">Sin archivo</span>
-              
-              <select id="styleSelect" class="style-select">
-                <option value="normal">Estilo: Normal</option>
-                <option value="amable">Estilo: Amable</option>
-                <option value="agresivo">Estilo: Directo</option>
-              </select>
-
-              <button class="action-btn primary-btn" onclick="processPdf()">
-                <i class="fas fa-cogs"></i> Procesar PDF
-              </button>
-              <button class="action-btn ghost-btn" onclick="clearPdfChat()">
-                <i class="fas fa-trash"></i> Limpiar
-              </button>
-            </div>
-            <div id="pdfStatus" class="status-badge" style="display:none"></div>
-            <div id="pdfActiveBadge" class="status-badge status-ok" style="display:none"></div>
-          </div>
-
-          <div id="panelFolder" class="action-panel" style="display:none">
-            <div class="action-row">
-              <input type="text" id="folderPathInput" class="folder-path-input" placeholder="Ruta del directorio en el servidor..." />
-              <button class="action-btn primary-btn" onclick="indexFolder()">
-                <i class="fas fa-database"></i> Indexar Carpeta
-              </button>
-              <button class="action-btn ghost-btn" onclick="clearIndex()">
-                <i class="fas fa-trash-alt"></i> Eliminar Índice
-              </button>
-            </div>
-            <div id="folderStatus" class="status-badge" style="display:none"></div>
-          </div>
-        </div>
-
-        <div class="search-buttons">
-          <button class="search-btn" onclick="doSearch()">Buscar con Google Engine</button>
-          <button class="search-btn">Me siento con suerte</button>
-        </div>
-      </div>
     </main>
 
+    <!-- ═════════════════════════════════════════
+         VISTA DE RESULTADOS
+    ═════════════════════════════════════════ -->
     <section id="results-view" style="display:none">
       <div class="results-header">
         <div class="results-search-row">
@@ -348,7 +560,13 @@
           </div>
           <div class="search-box results-search-box">
             <i class="fas fa-search search-icon"></i>
-            <input type="text" class="search-input" id="searchInputResults" placeholder="Buscar o hacer una pregunta..." onkeydown="if(event.key==='Enter') doSearch()" />
+            <input
+              type="text"
+              class="search-input"
+              id="searchInputResults"
+              placeholder="Buscar o hacer una pregunta..."
+              onkeydown="if(event.key==='Enter') doSearch()"
+            />
             <div class="search-icons">
               <i class="fas fa-microphone microphone-icon"></i>
               <i class="fas fa-camera camera-icon"></i>
@@ -387,6 +605,7 @@
       </div>
     </section>
 
+    <!-- Modal de vista previa -->
     <div id="previewModal" class="preview-modal">
       <div class="modal-content">
         <div class="modal-header">
@@ -405,10 +624,115 @@
       </div>
     </footer>
 
-  </div>
-</div>
+  </div><!-- /main-app-content -->
+</div><!-- /app-container -->
 
 <script>
+/* ══════════════════════════════════════════════════════
+   ╔═══════════════════════════════════════════════════╗
+   ║  CARRUSEL — PEGA AQUÍ LAS URLs DE LAS 5 IMÁGENES ║
+   ║  Reemplaza cada "URL_IMAGEN_X_AQUI" con la        ║
+   ║  URL real de tu imagen de la central.             ║
+   ╚═══════════════════════════════════════════════════╝
+══════════════════════════════════════════════════════ */
+const CAROUSEL_IMAGES = [
+  "imagen1.jfif",   // ← Pega aquí la URL de la imagen 1
+  "imagen2.jfif",   // ← Pega aquí la URL de la imagen 2
+  "imagen3.jfif",   // ← Pega aquí la URL de la imagen 3
+  "imagen4.jfif",   // ← Pega aquí la URL de la imagen 4
+  "imagen5.jfif",   // ← Pega aquí la URL de la imagen 5
+];
+
+/* Intervalo del carrusel: 3 minutos = 180 000 ms */
+const CAROUSEL_INTERVAL_MS = 180000;
+
+/* ═══════════════════════════════════════════════════
+   INICIALIZACIÓN DEL CARRUSEL
+═══════════════════════════════════════════════════ */
+let currentHeroSlide = 0;
+let carouselTimer = null;
+
+function initCarousel() {
+  const wrapper    = document.getElementById('heroSlidesWrapper');
+  const indicators = document.getElementById('heroIndicators');
+  const placeholder = document.getElementById('heroPlaceholder');
+  const blurred    = document.getElementById('blurredMirror');
+
+  /* Detectar si hay URLs reales (no placeholder) */
+  const hasRealImages = CAROUSEL_IMAGES.some(url => url.startsWith('http'));
+  if (hasRealImages) {
+    placeholder.style.display = 'none';
+  }
+
+  /* Crear slides e indicadores */
+  CAROUSEL_IMAGES.forEach((url, i) => {
+    /* Slide */
+    const slide = document.createElement('div');
+    slide.className = 'hero-slide' + (i === 0 ? ' active' : '');
+    slide.style.backgroundImage = `url('${url}')`;
+    wrapper.appendChild(slide);
+
+    /* Indicador (puntito) */
+    const dot = document.createElement('div');
+    dot.className = 'hero-dot' + (i === 0 ? ' active' : '');
+    dot.addEventListener('click', () => goToSlide(i));
+    indicators.appendChild(dot);
+  });
+
+  /* Espejo borroso: sincronizar con la primera imagen */
+  syncBlurred(CAROUSEL_IMAGES[0]);
+
+  /* Iniciar temporizador automático */
+  carouselTimer = setInterval(nextHeroSlide, CAROUSEL_INTERVAL_MS);
+}
+
+/* Cambiar a un slide específico */
+function goToSlide(index) {
+  if (index === currentHeroSlide) return;
+
+  const slides = document.querySelectorAll('.hero-slide');
+  const dots   = document.querySelectorAll('.hero-dot');
+
+  /* Salida del slide actual (desliza a la izquierda) */
+  slides[currentHeroSlide].classList.remove('active');
+  slides[currentHeroSlide].classList.add('exiting');
+
+  /* Limpieza tras la animación */
+  const exiting = slides[currentHeroSlide];
+  setTimeout(() => exiting.classList.remove('exiting'), 900);
+
+  /* Entrada del nuevo slide (viene de la derecha) */
+  currentHeroSlide = index;
+  slides[currentHeroSlide].classList.add('active');
+
+  /* Sincronizar espejo borroso */
+  syncBlurred(CAROUSEL_IMAGES[currentHeroSlide]);
+
+  /* Actualizar indicadores */
+  dots.forEach((d, i) => d.classList.toggle('active', i === currentHeroSlide));
+}
+
+function nextHeroSlide() {
+  goToSlide((currentHeroSlide + 1) % CAROUSEL_IMAGES.length);
+}
+
+/* Actualizar la sección borrosa con la imagen actual */
+function syncBlurred(imageUrl) {
+  const blurred = document.getElementById('blurredMirror');
+  if (blurred) blurred.style.backgroundImage = `url('${imageUrl}')`;
+}
+
+/* ═══════════════════════════════════════════════════
+   BARRA LATERAL — CONTRAER / EXPANDIR
+═══════════════════════════════════════════════════ */
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.toggle('collapsed');
+}
+
+/* ═══════════════════════════════════════════════════
+   LÓGICA ORIGINAL DE LA APP (sin cambios)
+═══════════════════════════════════════════════════ */
 const API = "http://127.0.0.1:8001";
 let currentTab = "pdf";
 
@@ -425,8 +749,8 @@ let chatMessages = {
   folder: []
 };
 
-// Cargar barra lateral en el inicio
 window.addEventListener("DOMContentLoaded", () => {
+  initCarousel();   /* ← Inicializar carrusel al cargar */
   switchTab("pdf");
   fetchConversations();
 });
@@ -445,29 +769,26 @@ async function fetchConversations() {
 function renderSidebar() {
   const container = document.getElementById("sidebarHistoryList");
   container.innerHTML = "";
-  
+
   Object.values(conversationsCache).reverse().forEach(conv => {
     const isSelected = conv.id === activeConversationId ? "active" : "";
     const icon = conv.type === "pdf" ? "fa-file-pdf" : "fa-folder-open";
-    
-    // Crear contenedor de la tarjeta de conversación
+
     const card = document.createElement("div");
     card.className = `history-card ${isSelected}`;
     card.id = `sidebar-card-${conv.id}`;
     card.onclick = () => loadConversation(conv.id);
 
-    // Título de la conversación
     const titleDiv = document.createElement("div");
     titleDiv.className = "history-card-title";
     titleDiv.innerHTML = `<i class="fas fa-comment-alt" style="color:#9aa0a6; font-size:12px;"></i> ${conv.title}`;
     card.appendChild(titleDiv);
 
-    // Subtexto: Nombre del archivo/carpeta (Hacer clic activa Vista Previa)
     const subtextDiv = document.createElement("div");
     subtextDiv.className = "history-card-subtext";
     subtextDiv.innerHTML = `<i class="fas ${icon}"></i> ${conv.target_name}`;
     subtextDiv.onclick = (e) => {
-      e.stopPropagation(); // Evita cambiar la conversación seleccionada
+      e.stopPropagation();
       if (conv.type === "pdf") {
         openPreview(encodeURIComponent(conv.file_path), conv.target_name);
       } else {
@@ -475,7 +796,6 @@ function renderSidebar() {
       }
     };
     card.appendChild(subtextDiv);
-
     container.appendChild(card);
   });
 }
@@ -498,8 +818,7 @@ async function loadConversation(id) {
   showResultsView();
   renderHistory();
   refreshPdfBadge();
-  
-  // Refrescar estado activo en la UI
+
   document.querySelectorAll(".history-card").forEach(el => el.classList.remove("active"));
   const activeCard = document.getElementById(`sidebar-card-${id}`);
   if (activeCard) activeCard.classList.add("active");
@@ -507,7 +826,7 @@ async function loadConversation(id) {
 
 function switchTab(tab) {
   currentTab = tab;
-  
+
   const inResults = document.getElementById("results-view").style.display !== "none";
   const activeContainerId = inResults ? "panelContainerResults" : "panelContainerHome";
   const container = document.getElementById(activeContainerId);
@@ -520,7 +839,7 @@ function switchTab(tab) {
     container.appendChild(panelFolder);
   }
 
-  panelPdf.style.display = tab === "pdf" ? "block" : "none";
+  panelPdf.style.display    = tab === "pdf"    ? "block" : "none";
   panelFolder.style.display = tab === "folder" ? "block" : "none";
 
   document.getElementById("tabPdf").classList.toggle("active", tab === "pdf");
@@ -558,16 +877,15 @@ async function processPdf() {
   fd.append("file", pdfFile);
 
   try {
-    const res = await fetch(`${API}/upload_pdf/`, { method: "POST", body: fd });
+    const res  = await fetch(`${API}/upload_pdf/`, { method: "POST", body: fd });
     const data = await res.json();
     if (res.ok) {
       pdfReady = true;
       pdfLoadedName = pdfFile.name;
       activeConversationId = data.conversation_id;
       showStatus("pdfStatus", `✅ PDF procesado con éxito`, "ok");
-      
-      await fetchConversations(); // Recargar barra lateral
-      await loadConversation(activeConversationId); // Forzar cambio de interfaz
+      await fetchConversations();
+      await loadConversation(activeConversationId);
     } else {
       showStatus("pdfStatus", `❌ ${data.error}`, "error");
     }
@@ -588,13 +906,12 @@ async function indexFolder() {
   fd.append("folder_path", path);
 
   try {
-    const res = await fetch(`${API}/index_folder/`, { method: "POST", body: fd });
+    const res  = await fetch(`${API}/index_folder/`, { method: "POST", body: fd });
     const data = await res.json();
     if (res.ok) {
       folderReady = true;
       activeConversationId = data.conversation_id;
       showStatus("folderStatus", `✅ Indexación completada.`, "ok");
-      
       await fetchConversations();
       await loadConversation(activeConversationId);
     } else {
@@ -610,7 +927,6 @@ function doSearch() {
   const input = document.getElementById(inResults ? "searchInputResults" : "searchInput");
   const q = input.value.trim();
   if (!q) return;
-
   showResultsView();
   input.value = "";
   askQuestion(q);
@@ -626,7 +942,6 @@ async function askQuestion(q) {
     return;
   }
 
-  // Render temporal local
   chatMessages[currentTab].push({ role: "user", content: q });
   renderHistory();
   scrollToBottom();
@@ -646,11 +961,9 @@ async function askQuestion(q) {
   }
 
   try {
-    const res = await fetch(endpoint, { method: "POST", body: fd });
+    const res  = await fetch(endpoint, { method: "POST", body: fd });
     const data = await res.json();
-    
     hideTyping();
-    // Actualizar cache local y volver a pintar
     await fetchConversations();
     await loadConversation(activeConversationId);
   } catch {
@@ -671,12 +984,14 @@ function renderHistory() {
       <div class="bubble-text">
         <div>${m.content.replace(/\n/g, "<br>")}</div>
         ${m.sources && m.sources.length > 0 ? `
-          <div style="margin-top: 12px; font-size: 11px; color: var(--muted); border-top: 1px dashed var(--border); padding-top: 6px;">
+          <div style="margin-top:12px;font-size:11px;color:var(--muted);border-top:1px dashed var(--border);padding-top:6px;">
             <strong>Documentos Fuente (Clic para Vista Previa):</strong><br>
             ${m.sources.map(src => {
               const baseName = src.split(/[\\/]/).pop();
-              const safeSrc = encodeURIComponent(src);
-              return `<button class="source-btn" onclick="openPreview('${safeSrc}', '${baseName}')"><i class="fas fa-file-pdf"></i> ${baseName}</button>`;
+              const safeSrc  = encodeURIComponent(src);
+              return `<button class="source-btn" onclick="openPreview('${safeSrc}','${baseName}')">
+                        <i class="fas fa-file-pdf"></i> ${baseName}
+                      </button>`;
             }).join("")}
           </div>
         ` : ''}
@@ -741,7 +1056,7 @@ async function backToHome() {
 }
 
 async function clearPdfChat() {
-  if(confirm("¿Seguro que deseas purgar la base de datos del servidor por completo?")) {
+  if (confirm("¿Seguro que deseas purgar la base de datos del servidor por completo?")) {
     try {
       await fetch(`${API}/clear_index/`, { method: "POST" });
       backToHome();
@@ -764,10 +1079,7 @@ function showStatus(id, msg, type) {
 
 function scrollToBottom() {
   setTimeout(() => {
-    window.scrollTo({
-      top: document.body.scrollHeight,
-      behavior: "smooth"
-    });
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
   }, 50);
 }
 </script>
