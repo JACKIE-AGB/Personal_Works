@@ -6,6 +6,86 @@
   <title>Google - CFE Intelligent Search</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* Estilos del modal para Vista Previa de Documentos Técnicos CFE */
+    .preview-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.6);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    .modal-content {
+      background: #ffffff;
+      width: 90%;
+      height: 90%;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    .modal-header {
+      background: #f1f3f4;
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #dadce0;
+    }
+    .modal-header h3 {
+      margin: 0;
+      font-size: 16px;
+      color: #202124;
+      font-family: Arial, sans-serif;
+    }
+    .close-modal {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #5f6368;
+    }
+    .close-modal:hover {
+      color: #000000;
+    }
+    .modal-body {
+      flex: 1;
+      background: #525659;
+    }
+    .source-btn {
+      background: #f1f3f4;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      padding: 5px 10px;
+      margin: 4px 4px 0 0;
+      cursor: pointer;
+      font-size: 11px;
+      color: #1a73e8;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    .source-btn:hover {
+      background: #e8f0fe;
+    }
+    .panel-container {
+      width: 100%;
+      margin-bottom: 15px;
+    }
+    .results-action-area {
+      padding: 10px 20px;
+      background: #fafafa;
+      border-bottom: 1px solid #eceff1;
+    }
+  </style>
 </head>
 <body>
 
@@ -46,42 +126,44 @@
       </button>
     </div>
 
-    <div id="panelPdf" class="action-panel">
-      <div class="action-row">
-        <label class="upload-label" for="pdfFileInput">
-          <i class="fas fa-upload"></i> Subir PDF
-          <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="onPdfSelected()" />
-        </label>
-        <span id="pdfFileName" class="filename-hint">Sin archivo</span>
-        
-        <select id="styleSelect" class="style-select">
-          <option value="normal">Estilo: Normal</option>
-          <option value="amable">Estilo: Amable</option>
-          <option value="agresivo">Estilo: Directo</option>
-        </select>
+    <div id="panelContainerHome" class="panel-container">
+      <div id="panelPdf" class="action-panel">
+        <div class="action-row">
+          <label class="upload-label" for="pdfFileInput">
+            <i class="fas fa-upload"></i> Subir PDF
+            <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="onPdfSelected()" />
+          </label>
+          <span id="pdfFileName" class="filename-hint">Sin archivo</span>
+          
+          <select id="styleSelect" class="style-select">
+            <option value="normal">Estilo: Normal</option>
+            <option value="amable">Estilo: Amable</option>
+            <option value="agresivo">Estilo: Directo</option>
+          </select>
 
-        <button class="action-btn primary-btn" onclick="processPdf()">
-          <i class="fas fa-cogs"></i> Procesar PDF
-        </button>
-        <button class="action-btn ghost-btn" onclick="clearPdfChat()">
-          <i class="fas fa-trash"></i> Limpiar
-        </button>
+          <button class="action-btn primary-btn" onclick="processPdf()">
+            <i class="fas fa-cogs"></i> Procesar PDF
+          </button>
+          <button class="action-btn ghost-btn" onclick="clearPdfChat()">
+            <i class="fas fa-trash"></i> Limpiar
+          </button>
+        </div>
+        <div id="pdfStatus" class="status-badge" style="display:none"></div>
+        <div id="pdfActiveBadge" class="status-badge status-ok" style="display:none"></div>
       </div>
-      <div id="pdfStatus" class="status-badge" style="display:none"></div>
-      <div id="pdfActiveBadge" class="status-badge status-ok" style="display:none"></div>
-    </div>
 
-    <div id="panelFolder" class="action-panel" style="display:none">
-      <div class="action-row">
-        <input type="text" id="folderPathInput" class="folder-path-input" placeholder="Ruta del directorio en el servidor..." />
-        <button class="action-btn primary-btn" onclick="indexFolder()">
-          <i class="fas fa-database"></i> Indexar Carpeta
-        </button>
-        <button class="action-btn ghost-btn" onclick="clearIndex()">
-          <i class="fas fa-trash-alt"></i> Eliminar Índice
-        </button>
+      <div id="panelFolder" class="action-panel" style="display:none">
+        <div class="action-row">
+          <input type="text" id="folderPathInput" class="folder-path-input" placeholder="Ruta del directorio en el servidor..." />
+          <button class="action-btn primary-btn" onclick="indexFolder()">
+            <i class="fas fa-database"></i> Indexar Carpeta
+          </button>
+          <button class="action-btn ghost-btn" onclick="clearIndex()">
+            <i class="fas fa-trash-alt"></i> Eliminar Índice
+          </button>
+        </div>
+        <div id="folderStatus" class="status-badge" style="display:none"></div>
       </div>
-      <div id="folderStatus" class="status-badge" style="display:none"></div>
     </div>
 
     <div class="search-buttons">
@@ -120,6 +202,8 @@
     </div>
   </div>
 
+  <div id="panelContainerResults" class="results-action-area"></div>
+
   <div class="results-body">
     <div id="aiOverview" class="ai-overview" style="display:none">
       <div class="ai-header">
@@ -135,6 +219,18 @@
     <div id="chatHistory" class="chat-history"></div>
   </div>
 </section>
+
+<div id="previewModal" class="preview-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="modalTitle">Vista Previa de Documento Técnico</h3>
+      <button class="close-modal" onclick="closePreview()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <iframe id="previewIframe" src="" width="100%" height="100%" style="border:none;"></iframe>
+    </div>
+  </div>
+</div>
 
 <footer id="main-footer">
   <div class="footer-country">
@@ -158,9 +254,25 @@ let chatMessages = {
 
 function switchTab(tab) {
   currentTab = tab;
-  document.getElementById("panelPdf").style.display = tab === "pdf" ? "block" : "none";
-  document.getElementById("panelFolder").style.display = tab === "folder" ? "block" : "none";
+  
+  // Detectar en qué interfaz visual nos encontramos para adjuntar los paneles
+  const inResults = document.getElementById("results-view").style.display !== "none";
+  const activeContainerId = inResults ? "panelContainerResults" : "panelContainerHome";
+  const container = document.getElementById(activeContainerId);
 
+  const panelPdf = document.getElementById("panelPdf");
+  const panelFolder = document.getElementById("panelFolder");
+
+  if (container && panelPdf && panelFolder) {
+    container.appendChild(panelPdf);
+    container.appendChild(panelFolder);
+  }
+
+  // Alternar visibilidad de los paneles de configuración
+  panelPdf.style.display = tab === "pdf" ? "block" : "none";
+  panelFolder.style.display = tab === "folder" ? "block" : "none";
+
+  // Sincronizar clases activas en los botones de pestañas de ambas vistas
   document.getElementById("tabPdf").classList.toggle("active", tab === "pdf");
   document.getElementById("tabFolder").classList.toggle("active", tab === "folder");
   document.getElementById("rtabPdf").classList.toggle("active", tab === "pdf");
@@ -263,7 +375,7 @@ async function askQuestion(q) {
   let endpoint;
   if (currentTab === "pdf") {
     if (!pdfReady) {
-      receiveAnswer("❌ Primero sube y procesa un PDF técnico.");
+      receiveAnswer("❌ Primero sube y procesa un PDF técnico.", null);
       return;
     }
     const style = document.getElementById("styleSelect").value;
@@ -271,7 +383,7 @@ async function askQuestion(q) {
     endpoint = `${API}/ask_pdf/`;
   } else {
     if (!folderReady) {
-      receiveAnswer("❌ Primero proporciona e indexa una carpeta del sistema.");
+      receiveAnswer("❌ Primero proporciona e indexa una carpeta del sistema.", null);
       return;
     }
     endpoint = `${API}/ask_folder/`;
@@ -282,7 +394,7 @@ async function askQuestion(q) {
     const data = await res.json();
     receiveAnswer(data.answer || "Sin respuesta del modelo", data.sources || null);
   } catch {
-    receiveAnswer("❌ Error crítico: No se pudo establecer conexión con la API.");
+    receiveAnswer("❌ Error crítico: No se pudo establecer conexión con la API.", null);
   }
 }
 
@@ -309,8 +421,13 @@ function renderHistory() {
       <div class="bubble-text">
         <div>${m.content.replace(/\n/g, "<br>")}</div>
         ${m.sources && m.sources.length > 0 ? `
-          <div style="margin-top: 10px; font-size: 11px; color: var(--muted); border-top: 1px dashed var(--border); padding-top: 4px;">
-            <strong>Fuentes Técnicas:</strong> ${m.sources.join(", ")}
+          <div style="margin-top: 12px; font-size: 11px; color: var(--muted); border-top: 1px dashed var(--border); padding-top: 6px;">
+            <strong>Documentos Fuente (Clic para Vista Previa):</strong><br>
+            ${m.sources.map(src => {
+              const baseName = src.split(/[\\/]/).pop();
+              const safeSrc = encodeURIComponent(src);
+              return `<button class="source-btn" onclick="openPreview('${safeSrc}', '${baseName}')"><i class="fas fa-file-pdf"></i> ${baseName}</button>`;
+            }).join("")}
           </div>
         ` : ''}
       </div>
@@ -332,19 +449,72 @@ function showResultsView() {
   document.getElementById("main-view").style.display = "none";
   document.getElementById("main-footer").style.display = "none";
   document.getElementById("results-view").style.display = "block";
+  switchTab(currentTab); // Forzar reubicación de controles a panelContainerResults
 }
 
-function backToHome() {
+// ==========================================================
+// OPERACIONES DE VISTA PREVIA (MODAL IFRAME NATIVO)
+// ==========================================================
+function openPreview(encodedPath, fileName) {
+  const path = decodeURIComponent(encodedPath);
+  document.getElementById("modalTitle").textContent = `Vista Previa Completa: ${fileName}`;
+  document.getElementById("previewIframe").src = `${API}/preview/?path=${encodeURIComponent(path)}`;
+  document.getElementById("previewModal").style.display = "flex";
+}
+
+function closePreview() {
+  document.getElementById("previewModal").style.display = "none";
+  document.getElementById("previewIframe").src = "";
+}
+
+// ==========================================================
+// VOLVER AL INICIO CON LIMPIEZA ABSOLUTA (FRONTEND + BACKEND)
+// ==========================================================
+async function backToHome() {
+  // 1. Mostrar estado de purga en los badges de carga
+  showStatus("pdfStatus", "⏳ Purgando memoria del servidor...", "info");
+  showStatus("folderStatus", "⏳ Eliminando índices vectoriales...", "info");
+
+  // 2. Limpieza en base de datos e índices locales del servidor
+  try {
+    await fetch(`${API}/clear_index/`, { method: "POST" });
+  } catch (e) {
+    print("⚠️ No se pudo purgar el almacenamiento en disco del backend.");
+  }
+
+  // 3. Resetear todos los estados lógicos del Frontend
+  chatMessages.pdf = [];
+  chatMessages.folder = [];
+  pdfReady = false;
+  folderReady = false;
+  pdfFile = null;
+  pdfLoadedName = "";
+
+  // 4. Limpiar casillas de selección e inputs de texto
+  document.getElementById("pdfFileInput").value = "";
+  document.getElementById("pdfFileName").textContent = "Sin archivo";
+  document.getElementById("folderPathInput").value = "";
+  document.getElementById("searchInput").value = "";
+  document.getElementById("searchInputResults").value = "";
+
+  // Ocultar estados e insignias activas
+  document.getElementById("pdfStatus").style.display = "none";
+  document.getElementById("folderStatus").style.display = "none";
+  document.getElementById("pdfActiveBadge").style.display = "none";
+
+  // 5. Redirección visual a la pantalla principal de Google
   document.getElementById("main-view").style.display = "flex";
   document.getElementById("main-footer").style.display = "block";
   document.getElementById("results-view").style.display = "none";
+
+  // Re-adjuntar paneles al contenedor Home de la pantalla principal
+  switchTab(currentTab);
 }
 
 // ==========================================================
-// OPERACIONES DE LIMPIEZA INTEGRAL (FRONTEND + BACKEND)
+// OPERACIONES DE LIMPIEZA INDIVIDUAL INDEPENDIENTES
 // ==========================================================
 async function clearPdfChat() {
-  // Vaciar campos en frontend
   document.getElementById("pdfFileInput").value = "";
   document.getElementById("pdfFileName").textContent = "Sin archivo";
   chatMessages.pdf = [];
@@ -360,12 +530,11 @@ async function clearPdfChat() {
     await fetch(`${API}/clear_index/`, { method: "POST" });
     showStatus("pdfStatus", "🧹 Campos y memoria de PDFs limpiados por completo.", "info");
   } catch {
-    showStatus("pdfStatus", "⚠️ Frontend limpio, pero no se pudo comunicar con el backend para purgar disco.", "warn");
+    showStatus("pdfStatus", "⚠️ Frontend limpio, pero falló comunicación backend.", "warn");
   }
 }
 
 async function clearIndex() {
-  // Vaciar campos en frontend
   document.getElementById("folderPathInput").value = "";
   chatMessages.folder = [];
   folderReady = false;
@@ -396,6 +565,11 @@ function scrollToBottom() {
     });
   }, 50);
 }
+
+// Inicializar y enlazar los paneles correctamente al iniciar la aplicación
+window.addEventListener("DOMContentLoaded", () => {
+  switchTab("pdf");
+});
 </script>
 </body>
 </html>

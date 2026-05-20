@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_classic.chains import RetrievalQA
@@ -38,8 +38,6 @@ if not GROQ_API_KEY:
 
 # ==========================================================
 # CONFIGURACIÓN DE MODELOS
-# Modelo de visión: llama-3.2-90b para máxima calidad en planos
-# Modelo de texto: llama-3.3-70b-versatile — mejor balance velocidad/inteligencia en Groq
 # ==========================================================
 VISION_MODEL = "llama-3.2-90b-vision-instruct"
 TEXT_MODEL   = "llama-3.3-70b-versatile"
@@ -47,26 +45,28 @@ TEXT_MODEL   = "llama-3.3-70b-versatile"
 MAX_DOCUMENTS    = 100
 PDF_INDEX_PATH   = "pdf_index"
 FOLDER_INDEX_PATH = "folder_index"
+UPLOAD_DIR       = "uploaded_pdfs"
 
-# ── Embeddings: multilingual-e5-small → ~3x más rápido que large, calidad similar ──
+# Asegurar existencia del directorio de carga persistente para vistas previas
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# ── Embeddings ──
 embeddings = HuggingFaceEmbeddings(
     model_name="intfloat/multilingual-e5-small",
     encode_kwargs={"normalize_embeddings": True},
     model_kwargs={"device": "cpu"},
 )
 
-# ── Pool de hilos para paralelismo en I/O-bound tasks ──
+# ── Pool de hilos ──
 MAX_WORKERS = min(8, (os.cpu_count() or 4) * 2)
 _executor   = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
-# ── Semáforo para limitar llamadas concurrentes a la API de Groq (evita rate-limits) ──
-# Ajusta según el tier de tu cuenta; 6 es seguro para cuentas de producción
 GROQ_CONCURRENCY = 6
 
 pdf_vectorstore    = None
 folder_vectorstore = None
 
-# ── Carga de índices persistentes al inicio ──
+# ── Carga de índices al inicio ──
 for index_path, label in [(PDF_INDEX_PATH, "PDF"), (FOLDER_INDEX_PATH, "carpetas")]:
     if os.path.exists(index_path):
         try:
@@ -81,15 +81,9 @@ for index_path, label in [(PDF_INDEX_PATH, "PDF"), (FOLDER_INDEX_PATH, "carpetas
 
 
 # ==========================================================
-# EXTRACCIÓN RÁPIDA DE PÁGINAS PDF (fase 1 — un solo hilo, fitz no es thread-safe)
+# EXTRACCIÓN RÁPIDA DE PÁGINAS PDF
 # ==========================================================
 def _extract_pages_data(file_path: str) -> list[dict]:
-    """
-    Abre el PDF UNA SOLA VEZ y extrae texto + bytes de imagen de cada página.
-    Las imágenes se renderizan en 100 DPI (suficiente para OCR/descripción técnica)
-    SOLO si la página tiene imágenes Y poco texto extraíble.
-    Devuelve una lista de dicts listos para la fase paralela.
-    """
     pages_data = []
     file_name  = os.path.basename(file_path)
 
@@ -97,13 +91,11 @@ def _extract_pages_data(file_path: str) -> list[dict]:
         for page_num, page in enumerate(pdf):
             text       = page.get_text().strip()
             has_images = len(page.get_images()) > 0
-
-            # Criterio de visión: imagen presente + texto insuficiente
             needs_vision = has_images and len(text) < 300
 
             img_b64 = None
             if needs_vision:
-                pix    = page.get_pixmap(dpi=100)  # 100 DPI — rápido y legible
+                pix    = page.get_pixmap(dpi=100)
                 img_b64 = base64.b64encode(pix.tobytes("png")).decode("utf-8")
 
             pages_data.append({
@@ -114,18 +106,13 @@ def _extract_pages_data(file_path: str) -> list[dict]:
                 "needs_vision": needs_vision,
                 "img_b64":      img_b64,
             })
-
     return pages_data
 
 
 # ==========================================================
-# ANÁLISIS CON VISIÓN (fase 2 — llamadas API en paralelo)
+# ANÁLISIS CON VISIÓN
 # ==========================================================
 def _analyze_page(page_data: dict) -> Document:
-    """
-    Construye el Document de una página.
-    Si necesita visión, llama a la API de Groq con una instancia local (thread-safe).
-    """
     content = (
         f"ARCHIVO: {page_data['file_name']}\n"
         f"PÁGINA: {page_data['page_num'] + 1}\n"
@@ -164,27 +151,18 @@ def _analyze_page(page_data: dict) -> Document:
 
 
 # ==========================================================
-# PIPELINE PRINCIPAL DE EXTRACCIÓN (combina fases 1 y 2)
+# PIPELINE PRINCIPAL DE EXTRACCIÓN
 # ==========================================================
 def extract_pdf_parallel(file_path: str) -> list[Document]:
-    """
-    1. Extrae datos de todas las páginas de forma secuencial y segura (fitz).
-    2. Procesa las llamadas de visión en paralelo con ThreadPoolExecutor.
-    El resultado neto: el tiempo total ≈ tiempo de la página de visión más lenta,
-    no la suma de todas.
-    """
     pages_data = _extract_pages_data(file_path)
-
     documents = [None] * len(pages_data)
 
-    # Páginas que no necesitan visión: procesadas sin API call, casi instantáneo
     text_only  = [p for p in pages_data if not p["needs_vision"]]
     need_vision = [p for p in pages_data if p["needs_vision"]]
 
     for pd_item in text_only:
         documents[pd_item["page_num"]] = _analyze_page(pd_item)
 
-    # Páginas con visión: llamadas a API en paralelo
     if need_vision:
         with ThreadPoolExecutor(max_workers=GROQ_CONCURRENCY) as vis_pool:
             futures = {
@@ -202,7 +180,6 @@ def extract_pdf_parallel(file_path: str) -> list[Document]:
 
 
 def _process_single_pdf(file_path: str) -> list[Document]:
-    """Wrapper seguro para usar en pool de carpetas."""
     try:
         return extract_pdf_parallel(file_path)
     except Exception as e:
@@ -217,13 +194,14 @@ def _process_single_pdf(file_path: str) -> list[Document]:
 async def upload_pdf(file: UploadFile = File(...)):
     global pdf_vectorstore
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(await file.read())
-            temp_path = tmp.name
+        # Guardar en ruta controlada persistente para visualización nativa
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
         loop = asyncio.get_event_loop()
         raw_docs = await loop.run_in_executor(
-            _executor, partial(extract_pdf_parallel, temp_path)
+            _executor, partial(extract_pdf_parallel, file_path)
         )
 
         splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
@@ -232,7 +210,6 @@ async def upload_pdf(file: UploadFile = File(...)):
         pdf_vectorstore = FAISS.from_documents(docs, embeddings)
         pdf_vectorstore.save_local(PDF_INDEX_PATH)
 
-        os.unlink(temp_path)
         return {
             "message": "✅ PDF procesado e indexado correctamente.",
             "pages":   len(raw_docs),
@@ -277,11 +254,16 @@ Respuesta:"""
 
     loop   = asyncio.get_event_loop()
     result = await loop.run_in_executor(_executor, partial(chain.invoke, {"query": question}))
-    return {"answer": result["result"]}
+    sources = sorted(set(d.metadata["source"] for d in result["source_documents"]))
+
+    return {
+        "answer": result["result"],
+        "sources": sources
+    }
 
 
 # ==========================================================
-# ENDPOINTS: CARPETAS MASIVAS (PDFs procesados en paralelo)
+# ENDPOINTS: CARPETAS MASIVAS
 # ==========================================================
 @app.post("/index_folder/")
 async def index_folder(folder_path: str = Form(...)):
@@ -304,7 +286,6 @@ async def index_folder(folder_path: str = Form(...)):
 
         loop = asyncio.get_event_loop()
 
-        # ── Procesar todos los PDFs en paralelo (un hilo por archivo) ──
         futures = [
             loop.run_in_executor(_executor, _process_single_pdf, fp)
             for fp in pdf_files
@@ -364,12 +345,23 @@ Respuesta:"""
 
     loop   = asyncio.get_event_loop()
     result = await loop.run_in_executor(_executor, partial(chain.invoke, {"query": question}))
-    sources = sorted(set(os.path.basename(d.metadata["source"]) for d in result["source_documents"]))
+    sources = sorted(set(d.metadata["source"] for d in result["source_documents"]))
 
     return {
         "answer":  result["result"],
         "sources": sources,
     }
+
+
+# ==========================================================
+# ENDPOINT DE VISTA PREVIA DE DOCUMENTOS
+# ==========================================================
+@app.get("/preview/")
+async def preview_file(path: str):
+    """Retorna el archivo PDF de manera nativa para renderizado en iframe/visor."""
+    if not os.path.exists(path):
+        return JSONResponse(status_code=404, content={"error": f"Archivo no encontrado en la ruta: {path}"})
+    return FileResponse(path, media_type="application/pdf")
 
 
 # ==========================================================
@@ -380,11 +372,15 @@ async def clear_index():
     global pdf_vectorstore, folder_vectorstore
     pdf_vectorstore = folder_vectorstore = None
 
-    for path in (PDF_INDEX_PATH, FOLDER_INDEX_PATH):
+    for path in (PDF_INDEX_PATH, FOLDER_INDEX_PATH, UPLOAD_DIR):
         if os.path.exists(path):
-            shutil.rmtree(path)
+            try:
+                shutil.rmtree(path)
+            except Exception as e:
+                print(f"⚠️ Error al limpiar ruta {path}: {e}")
 
-    return {"message": "✅ Índices de memoria y disco eliminados correctamente."}
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    return {"message": "✅ Índices de memoria, disco y archivos cargados eliminados."}
 
 
 @app.get("/health")
