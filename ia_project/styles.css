@@ -51,37 +51,45 @@ body {
 
 
 /* ─────────────────────────────────────────────
-   HEADER - VERSIÓN TRANSPARENTE CON BLUR
+   HEADER - VERSIÓN TRANSPARENTE CON BLUR (ESTILO INSTITUCIONAL)
 ───────────────────────────────────────────── */
 
 header {
     display: flex;
     justify-content: space-between;   
     align-items: center;
-    padding: 10px 16px 10px 12px;
+    padding: 12px 24px;
     font-size: 14px;
     flex-shrink: 0;
-    position: sticky;
+    position: absolute; /* Flota sobre el carrusel sin empujarlo */
     top: 0;
+    left: 0;
+    width: 100%;
     z-index: 100;
-    background: rgba(255, 255, 255, 0.75);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.15); /* Súper transparente */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     transition: background 0.3s ease, backdrop-filter 0.3s ease;
 }
 
-/* Estilo al hacer scroll - más sólido para mejor legibilidad */
+/* Estilo al hacer scroll - ligeramente más visible para mantener lectura */
 header.scrolled {
-    background: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.3);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .header-left {
     display: flex;
     align-items: center;
+}
+
+/* Forzar que el botón de hamburguesa sea blanco para contrastar */
+.header-left .hamburger-btn {
+    color: #ffffff !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
 
 .header-links {
@@ -92,15 +100,16 @@ header.scrolled {
 
 .header-links a {
     text-decoration: none;
-    color: rgba(0, 0, 0, 0.75);
-    font-size: 13px;
+    color: #ffffff; /* Texto blanco para la barra transparente */
+    font-size: 14px;
     font-weight: 500;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
     transition: color 0.2s ease;
 }
 
 .header-links a:hover {
     text-decoration: underline;
-    color: rgba(0, 0, 0, 0.9);
+    color: #e0e0e0;
 }
 
 
@@ -120,12 +129,13 @@ header.scrolled {
 }
 
 .apps-icon:hover {
-    background: rgba(60, 64, 67, 0.1);
+    background: rgba(255, 255, 255, 0.15);
 }
 
 .apps-icon i {
     font-size: 18px;
-    color: #5f6368;
+    color: #ffffff;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
 }
 
 .user-profile {
@@ -614,17 +624,144 @@ main {
 
 
 /* ─────────────────────────────────────────────
-   FOOTER
+   HERO — CARRUSEL DE IMÁGENES (PAISAJE CORREGIDO)
+───────────────────────────────────────────── */
+
+.hero-carousel-section {
+    width: 100%;
+    height: 420px; /* Incrementado para desplegar la toma completa de la presa con el cielo */
+    position: relative;
+    background: #ebebeb;
+    flex-shrink: 0;
+}
+
+.hero-slide {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: top center; /* Prioriza y fija la parte superior de la imagen (el cielo) */
+    background-repeat: no-repeat;
+    background-color: #1a1a1a;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: transform 0.85s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity  0.85s ease;
+}
+
+.hero-slide.active {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.hero-slide.exiting {
+    opacity: 0;
+    transform: translateX(-100%);
+}
+
+.hero-placeholder-text {
+    position: absolute;
+    bottom: 24px;
+    left: 30px;
+    top: auto;
+    transform: none;
+    font-size: 22px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.92);
+    letter-spacing: 1.5px;
+    pointer-events: none;
+    user-select: none;
+    font-family: 'Google Sans', Arial, sans-serif;
+    z-index: 4;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.65);
+    white-space: nowrap;
+}
+
+.hero-indicators {
+    position: absolute;
+    bottom: 24px; /* Empujado levemente hacia arriba del corte borroso */
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 3;
+}
+
+.hero-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.45);
+    cursor: pointer;
+    transition: background 0.3s, transform 0.3s;
+    border: 1px solid rgba(0,0,0,0.15);
+}
+
+.hero-dot.active {
+    background: rgba(255,255,255,0.95);
+    transform: scale(1.35);
+}
+
+
+/* ─────────────────────────────────────────────
+   ÁREA DE BÚSQUEDA Y SECCIÓN BORROSA (DESPLAZADOS)
+───────────────────────────────────────────── */
+
+.below-hero-wrapper {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    width: 100%;
+    padding-bottom: 60px; /* Espacio para evitar superposición con el footer */
+}
+
+.search-area-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px 40px; /* Más aire vertical para bajar la terminal de controles */
+    box-sizing: border-box;
+    position: relative;
+    z-index: 2;
+}
+
+.blurred-mirror-section {
+    position: absolute;
+    inset: -30px;
+    background-size: cover;
+    background-position: top center; /* Sincronizado para un acople de espejo perfecto */
+    background-repeat: no-repeat;
+    background-color: #c0c0c0;
+    filter: blur(28px) brightness(0.58);
+    z-index: 1;
+    transition: background-image 0.85s ease;
+}
+
+
+/* ─────────────────────────────────────────────
+   FOOTER (ESTILO ACERADO TRASLÚCIDO)
 ───────────────────────────────────────────── */
 
 footer {
-    background: #f2f2f2;
-    color: var(--muted);
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #ffffff;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .footer-country {
-    padding: 14px 28px;
-    border-bottom: 1px solid #dadce0;
+    padding: 12px 28px;
+    font-size: 13px;
+    font-weight: 500;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
 }
 
 
@@ -688,7 +825,7 @@ footer {
         max-width: 88%;
     }
     .hero-carousel-section {
-        height: 180px;
+        height: 280px; /* Adaptación proporcional para pantallas medianas */
     }
     .hero-placeholder-text {
         font-size: 36px;
@@ -714,7 +851,7 @@ footer {
         max-width: 220px;
     }
     .hero-carousel-section {
-        height: 140px;
+        height: 200px; /* Adaptación para smartphones */
     }
     .hero-placeholder-text {
         font-size: 28px;
