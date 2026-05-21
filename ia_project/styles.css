@@ -51,18 +51,32 @@ body {
 
 
 /* ─────────────────────────────────────────────
-   HEADER
-   — Ahora usa space-between para acomodar el
-     botón hamburguesa a la izquierda
+   HEADER - VERSIÓN TRANSPARENTE CON BLUR
 ───────────────────────────────────────────── */
 
 header {
     display: flex;
-    justify-content: space-between;   /* ← cambiado de flex-end */
+    justify-content: space-between;   
     align-items: center;
     padding: 10px 16px 10px 12px;
     font-size: 14px;
     flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    transition: background 0.3s ease, backdrop-filter 0.3s ease;
+}
+
+/* Estilo al hacer scroll - más sólido para mejor legibilidad */
+header.scrolled {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .header-left {
@@ -78,12 +92,15 @@ header {
 
 .header-links a {
     text-decoration: none;
-    color: rgba(0,0,0,.87);
+    color: rgba(0, 0, 0, 0.75);
     font-size: 13px;
+    font-weight: 500;
+    transition: color 0.2s ease;
 }
 
 .header-links a:hover {
     text-decoration: underline;
+    color: rgba(0, 0, 0, 0.9);
 }
 
 
@@ -99,10 +116,11 @@ header {
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    transition: background 0.2s ease;
 }
 
 .apps-icon:hover {
-    background: rgba(60,64,67,.08);
+    background: rgba(60, 64, 67, 0.1);
 }
 
 .apps-icon i {
@@ -114,7 +132,7 @@ header {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: #8a5cf5;
+    background: linear-gradient(135deg, #8a5cf5, #6c3ce0);
     color: white;
     display: flex;
     align-items: center;
@@ -122,13 +140,18 @@ header {
     font-weight: 700;
     font-size: 14px;
     cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.user-profile:hover {
+    transform: scale(1.02);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
 
 
 /* ─────────────────────────────────────────────
    MAIN
-   — Removido justify-content:center y padding
-     para que el carrusel ocupe el ancho completo
 ───────────────────────────────────────────── */
 
 main {
@@ -136,13 +159,12 @@ main {
     flex-direction: column;
     align-items: center;
     flex-grow: 1;
-    padding: 0;                        /* ← antes era 20px */
+    padding: 0;                        
 }
 
 
 /* ─────────────────────────────────────────────
-   LOGO (mantenido para compatibilidad con
-   results-view mini-logo)
+   LOGO 
 ───────────────────────────────────────────── */
 
 .logo-container {
@@ -405,42 +427,33 @@ main {
 
 
 /* ─────────────────────────────────────────────
-   MINI LOGO
+   MINI LOGO CFE
 ───────────────────────────────────────────── */
 
-.logo-mini {
-    font-size: 30px;
-    font-weight: 700;
-    letter-spacing: -1px;
+.logo-mini-cfe {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
-.logo-mini span:nth-child(1) { color: var(--blue);   }
-.logo-mini span:nth-child(2) { color: var(--red);    }
-.logo-mini span:nth-child(3) { color: var(--yellow); }
-.logo-mini span:nth-child(4) { color: var(--blue);   }
-.logo-mini span:nth-child(5) { color: var(--green);  }
-.logo-mini span:nth-child(6) { color: var(--red);    }
+.cfe-logo-mini-img {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+}
+
+.cfe-mini-text {
+    font-size: 20px;
+    font-weight: 800;
+    color: #006633;
+    letter-spacing: 1px;
+    font-family: Arial, sans-serif;
+}
 
 .results-search-box {
     flex: 1;
     max-width: 640px;
-}
-
-
-/* ─────────────────────────────────────────────
-   BACK BUTTON
-───────────────────────────────────────────── */
-
-.results-back-btn {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    border: 1px solid var(--border);
-    background: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
 }
 
 

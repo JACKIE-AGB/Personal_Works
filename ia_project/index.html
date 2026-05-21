@@ -42,11 +42,9 @@
       flex-shrink: 0;
       overflow-y: auto;
       overflow-x: hidden;
-      /* Transición suave al contraer/expandir */
       transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease, border 0.3s ease;
     }
 
-    /* Estado colapsado */
     .sidebar.collapsed {
       width: 0;
       min-width: 0;
@@ -67,13 +65,6 @@
       white-space: nowrap;
     }
 
-    /*
-    ══════════════════════════════════════════════════
-    LOGO CFE OFICIAL — Pega la URL del logo aquí:
-    Reemplaza "URL_LOGO_CFE_AQUI" en el atributo src
-    del <img> dentro de .sidebar-header (línea ~165 HTML)
-    ══════════════════════════════════════════════════
-    */
     .cfe-logo-img {
       width: 34px;
       height: 34px;
@@ -225,13 +216,13 @@
       inset: 0;
     }
 
-    /* Cada slide se genera dinámicamente por JS */
     .hero-slide {
       position: absolute;
       inset: 0;
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
+      background-color: #1a1a1a;
       opacity: 0;
       transform: translateX(100%);
       transition: transform 0.85s cubic-bezier(0.4, 0, 0.2, 1),
@@ -246,24 +237,24 @@
       transform: translateX(-100%);
     }
 
-    /* Texto placeholder "Libro final" — visible hasta que se carguen imágenes */
     .hero-placeholder-text {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 54px;
-      font-weight: 300;
-      color: #b5b5b5;
-      letter-spacing: 3px;
+      bottom: 18px;
+      left: 22px;
+      top: auto;
+      transform: none;
+      font-size: 22px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.92);
+      letter-spacing: 1.5px;
       pointer-events: none;
       user-select: none;
       font-family: 'Google Sans', Arial, sans-serif;
-      z-index: 2;
+      z-index: 4;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.65);
       white-space: nowrap;
     }
 
-    /* Indicadores puntitos del carrusel */
     .hero-indicators {
       position: absolute;
       bottom: 14px;
@@ -288,6 +279,19 @@
     }
 
     /* ═══════════════════════════════════════════════
+       WRAPPER DEBAJO DEL HERO — search + blur apilados
+    ═══════════════════════════════════════════════ */
+    .below-hero-wrapper {
+      position: relative;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+      width: 100%;
+    }
+
+    /* ═══════════════════════════════════════════════
        ÁREA DE BÚSQUEDA (wrapper con padding)
     ═══════════════════════════════════════════════ */
     .search-area-wrapper {
@@ -296,21 +300,22 @@
       justify-content: center;
       padding: 28px 20px 10px;
       box-sizing: border-box;
+      position: relative;
+      z-index: 2;
     }
 
     /* ═══════════════════════════════════════════════
-       SECCIÓN BORROSA — espejo sincronizado del carrusel
+       SECCIÓN BORROSA — ocupa TODO el espacio debajo del carrusel
     ═══════════════════════════════════════════════ */
     .blurred-mirror-section {
-      width: 100%;
-      flex: 1;
-      min-height: 80px;
+      position: absolute;
+      inset: -30px;
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
-      background-color: #e0e0e0;
-      filter: blur(24px) brightness(0.60);
-      transform: scale(1.12); /* evita bordes blancos del blur */
+      background-color: #c0c0c0;
+      filter: blur(28px) brightness(0.58);
+      z-index: 1;
       transition: background-image 0.85s ease;
     }
 
@@ -392,30 +397,19 @@
 
 <div class="app-container">
 
-  <!-- ═══════════════════════════════════════════
-       BARRA LATERAL
-  ═══════════════════════════════════════════ -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <!--
-        ╔═══════════════════════════════════════════╗
-        ║  LOGO CFE OFICIAL                         ║
-        ║  Reemplaza "URL_LOGO_CFE_AQUI" con la URL ║
-        ║  real del logo de CFE (PNG o SVG).         ║
-        ╚═══════════════════════════════════════════╝
-      -->
       <img
         src="logo.png"
         alt="Logo CFE"
         class="cfe-logo-img"
         onerror="this.style.display='none'; document.getElementById('cfe-icon-fallback').style.display='inline-block';"
       />
-      <!-- Ícono de respaldo mientras no hay logo real -->
       <i class="fas fa-layer-group" id="cfe-icon-fallback" style="color:#4285f4; display:none;"></i>
       <span>CFE Intelligent</span>
     </div>
 
-    <button class="new-chat-btn" onclick="backToHome()">
+    <button class="new-chat-btn" onclick="newConversation()">
       <i class="fas fa-plus"></i> Nueva conversación
     </button>
 
@@ -426,13 +420,9 @@
     <div class="history-list" id="sidebarHistoryList"></div>
   </aside>
 
-  <!-- ═══════════════════════════════════════════
-       CONTENIDO PRINCIPAL
-  ═══════════════════════════════════════════ -->
   <div class="main-app-content">
 
     <header>
-      <!-- Botón hamburguesa para contraer / expandir la barra lateral -->
       <div class="header-left">
         <button class="hamburger-btn" onclick="toggleSidebar()" title="Contraer / expandir menú">
           <i class="fas fa-bars"></i>
@@ -446,29 +436,18 @@
       </div>
     </header>
 
-    <!-- ═════════════════════════════════════════
-         VISTA PRINCIPAL (HOME)
-    ═════════════════════════════════════════ -->
     <main id="main-view">
 
-      <!-- ─────────────────────────────────────
-           CARRUSEL HERO — Imágenes de la central
-           Las URLs se configuran en el array
-           CAROUSEL_IMAGES dentro del <script>
-      ───────────────────────────────────────── -->
       <div class="hero-carousel-section" id="heroCarouselSection">
-        <!-- Los slides se insertan por JavaScript -->
         <div class="hero-slides-wrapper" id="heroSlidesWrapper"></div>
-
-        <!-- Texto placeholder: visible hasta que se asignen imágenes reales -->
         <div class="hero-placeholder-text" id="heroPlaceholder">Libro final</div>
-
-        <!-- Indicadores (puntitos) -->
         <div class="hero-indicators" id="heroIndicators"></div>
       </div>
 
-      <!-- Área de búsqueda -->
-      <div class="search-area-wrapper">
+      <div class="below-hero-wrapper">
+        <div class="blurred-mirror-section" id="blurredMirror"></div>
+
+        <div class="search-area-wrapper">
         <div class="search-container">
           <div class="search-box">
             <i class="fas fa-search search-icon"></i>
@@ -538,25 +517,22 @@
             <button class="search-btn">Me siento con suerte</button>
           </div>
         </div>
+        </div>
       </div>
-
-      <!-- ─────────────────────────────────────
-           SECCIÓN BORROSA
-           Espejo del carrusel de arriba, con blur.
-           Se sincroniza automáticamente con JS.
-      ───────────────────────────────────────── -->
-      <div class="blurred-mirror-section" id="blurredMirror"></div>
 
     </main>
 
-    <!-- ═════════════════════════════════════════
-         VISTA DE RESULTADOS
-    ═════════════════════════════════════════ -->
     <section id="results-view" style="display:none">
       <div class="results-header">
         <div class="results-search-row">
-          <div class="logo-mini">
-            <span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span>
+          <div class="logo-mini-cfe">
+            <img
+              src="logo.png"
+              alt="CFE"
+              class="cfe-logo-mini-img"
+              onerror="this.style.display='none'; document.getElementById('cfe-mini-fallback').style.display='flex';"
+            />
+            <span id="cfe-mini-fallback" class="cfe-mini-text" style="display:none;">CFE</span>
           </div>
           <div class="search-box results-search-box">
             <i class="fas fa-search search-icon"></i>
@@ -572,10 +548,7 @@
               <i class="fas fa-camera camera-icon"></i>
             </div>
           </div>
-          <button class="results-back-btn" onclick="backToHome()">
-            <i class="fas fa-home"></i>
-          </button>
-        </div>
+          </div>
 
         <div class="results-tabs-bar">
           <button class="results-tab active" id="rtabPdf" onclick="switchTab('pdf')">
@@ -605,7 +578,6 @@
       </div>
     </section>
 
-    <!-- Modal de vista previa -->
     <div id="previewModal" class="preview-modal">
       <div class="modal-content">
         <div class="modal-header">
@@ -624,31 +596,20 @@
       </div>
     </footer>
 
-  </div><!-- /main-app-content -->
-</div><!-- /app-container -->
+  </div>
+</div>
 
 <script>
-/* ══════════════════════════════════════════════════════
-   ╔═══════════════════════════════════════════════════╗
-   ║  CARRUSEL — PEGA AQUÍ LAS URLs DE LAS 5 IMÁGENES ║
-   ║  Reemplaza cada "URL_IMAGEN_X_AQUI" con la        ║
-   ║  URL real de tu imagen de la central.             ║
-   ╚═══════════════════════════════════════════════════╝
-══════════════════════════════════════════════════════ */
 const CAROUSEL_IMAGES = [
-  "imagen1.jfif",   // ← Pega aquí la URL de la imagen 1
-  "imagen2.jfif",   // ← Pega aquí la URL de la imagen 2
-  "imagen3.jfif",   // ← Pega aquí la URL de la imagen 3
-  "imagen4.jfif",   // ← Pega aquí la URL de la imagen 4
-  "imagen5.jfif",   // ← Pega aquí la URL de la imagen 5
+  "imagen1.jfif",   
+  "imagen2.jfif",   
+  "imagen3.jfif",   
+  "imagen4.jfif",   
+  "imagen5.jfif",   
 ];
 
-/* Intervalo del carrusel: 3 minutos = 180 000 ms */
 const CAROUSEL_INTERVAL_MS = 180000;
 
-/* ═══════════════════════════════════════════════════
-   INICIALIZACIÓN DEL CARRUSEL
-═══════════════════════════════════════════════════ */
 let currentHeroSlide = 0;
 let carouselTimer = null;
 
@@ -656,59 +617,44 @@ function initCarousel() {
   const wrapper    = document.getElementById('heroSlidesWrapper');
   const indicators = document.getElementById('heroIndicators');
   const placeholder = document.getElementById('heroPlaceholder');
-  const blurred    = document.getElementById('blurredMirror');
 
-  /* Detectar si hay URLs reales (no placeholder) */
-  const hasRealImages = CAROUSEL_IMAGES.some(url => url.startsWith('http'));
+  const hasRealImages = CAROUSEL_IMAGES.some(url => url.startsWith('http') || url.endsWith('.jfif') || url.endsWith('.png'));
   if (hasRealImages) {
     placeholder.style.display = 'none';
   }
 
-  /* Crear slides e indicadores */
   CAROUSEL_IMAGES.forEach((url, i) => {
-    /* Slide */
     const slide = document.createElement('div');
     slide.className = 'hero-slide' + (i === 0 ? ' active' : '');
     slide.style.backgroundImage = `url('${url}')`;
     wrapper.appendChild(slide);
 
-    /* Indicador (puntito) */
     const dot = document.createElement('div');
     dot.className = 'hero-dot' + (i === 0 ? ' active' : '');
     dot.addEventListener('click', () => goToSlide(i));
     indicators.appendChild(dot);
   });
 
-  /* Espejo borroso: sincronizar con la primera imagen */
   syncBlurred(CAROUSEL_IMAGES[0]);
-
-  /* Iniciar temporizador automático */
   carouselTimer = setInterval(nextHeroSlide, CAROUSEL_INTERVAL_MS);
 }
 
-/* Cambiar a un slide específico */
 function goToSlide(index) {
   if (index === currentHeroSlide) return;
 
   const slides = document.querySelectorAll('.hero-slide');
   const dots   = document.querySelectorAll('.hero-dot');
 
-  /* Salida del slide actual (desliza a la izquierda) */
   slides[currentHeroSlide].classList.remove('active');
   slides[currentHeroSlide].classList.add('exiting');
 
-  /* Limpieza tras la animación */
   const exiting = slides[currentHeroSlide];
   setTimeout(() => exiting.classList.remove('exiting'), 900);
 
-  /* Entrada del nuevo slide (viene de la derecha) */
   currentHeroSlide = index;
   slides[currentHeroSlide].classList.add('active');
 
-  /* Sincronizar espejo borroso */
   syncBlurred(CAROUSEL_IMAGES[currentHeroSlide]);
-
-  /* Actualizar indicadores */
   dots.forEach((d, i) => d.classList.toggle('active', i === currentHeroSlide));
 }
 
@@ -716,23 +662,16 @@ function nextHeroSlide() {
   goToSlide((currentHeroSlide + 1) % CAROUSEL_IMAGES.length);
 }
 
-/* Actualizar la sección borrosa con la imagen actual */
 function syncBlurred(imageUrl) {
   const blurred = document.getElementById('blurredMirror');
   if (blurred) blurred.style.backgroundImage = `url('${imageUrl}')`;
 }
 
-/* ═══════════════════════════════════════════════════
-   BARRA LATERAL — CONTRAER / EXPANDIR
-═══════════════════════════════════════════════════ */
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
   sidebar.classList.toggle('collapsed');
 }
 
-/* ═══════════════════════════════════════════════════
-   LÓGICA ORIGINAL DE LA APP (sin cambios)
-═══════════════════════════════════════════════════ */
 const API = "http://127.0.0.1:8001";
 let currentTab = "pdf";
 
@@ -749,10 +688,24 @@ let chatMessages = {
   folder: []
 };
 
+function initTransparentHeader() {
+    const header = document.querySelector('header');
+    if (!header) return;
+    
+    window.addEventListener('scroll', () => {
+        if (window.scrollY > 10) {
+            header.classList.add('scrolled');
+        } else {
+            header.classList.remove('scrolled');
+        }
+    });
+}
+
 window.addEventListener("DOMContentLoaded", () => {
-  initCarousel();   /* ← Inicializar carrusel al cargar */
+  initCarousel();   
   switchTab("pdf");
   fetchConversations();
+  initTransparentHeader();
 });
 
 async function fetchConversations() {
@@ -1030,13 +983,31 @@ function closePreview() {
 }
 
 async function backToHome() {
+  document.getElementById("main-view").style.display = "flex";
+  document.getElementById("main-footer").style.display = "block";
+  document.getElementById("results-view").style.display = "none";
+
+  document.querySelectorAll(".history-card").forEach(el => el.classList.remove("active"));
+
+  if (activeConversationId) {
+    const card = document.getElementById(`sidebar-card-${activeConversationId}`);
+    if (card) card.classList.add("active");
+  }
+
+  switchTab(currentTab); 
+  fetchConversations();
+}
+
+async function newConversation() {
   activeConversationId = null;
   pdfReady = false;
   folderReady = false;
   pdfFile = null;
   pdfLoadedName = "";
+  chatMessages = { pdf: [], folder: [] };
 
-  document.getElementById("pdfFileInput").value = "";
+  const pdfInput = document.getElementById("pdfFileInput");
+  if (pdfInput) pdfInput.value = "";
   document.getElementById("pdfFileName").textContent = "Sin archivo";
   document.getElementById("folderPathInput").value = "";
   document.getElementById("searchInput").value = "";
@@ -1059,7 +1030,7 @@ async function clearPdfChat() {
   if (confirm("¿Seguro que deseas purgar la base de datos del servidor por completo?")) {
     try {
       await fetch(`${API}/clear_index/`, { method: "POST" });
-      backToHome();
+      newConversation();
     } catch {
       alert("Error limpiando el backend");
     }

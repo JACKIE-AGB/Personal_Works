@@ -1,0 +1,22 @@
+{
+    "conversacion_1": {
+        "id": "conversacion_1",
+        "title": "Conversación 1",
+        "type": "pdf",
+        "target_name": "Folleto CJN.pdf",
+        "file_path": "uploaded_pdfs\\Folleto CJN.pdf",
+        "history": [
+            {
+                "role": "user",
+                "content": "Descripcion de casa de maquinas"
+            },
+            {
+                "role": "assistant",
+                "content": "La casa de máquinas se encuentra alojada en una caverna excavada en roca, con losas y muros de concreto reforzado. Está equipada con dos grupos turbogeneradores, cada uno con turbinas tipo Francis de eje vertical. La casa de máquinas cuenta con un sistema de ventilación forzada a través de tres lumbreras verticales y una lumbrera adicional para contener los cables de control, fuerza y medición.\n\nLas dimensiones de la casa de máquinas son:\n- Ancho: 22.2 m\n- Largo: 97.5 m\n- Alto: 49.5 m\n\nLas elevaciones de los pisos son:\n- Piso de excitadores: 224.60 m.s.n.m.\n- Piso de generadores: 220.40 m.s.n.m.\n- Piso de turbinas: 216 m.s.n.m.\n\nLa potencia total instalada en los generadores es de 789.48 MVA. Además, la casa de máquinas cuenta con dos grúas viajeras con una capacidad conjunta de 2 x 400 t para realizar el montaje y los servicios de mantenimiento de los equipos y sistemas auxiliares de los turbogeneradores.",
+                "sources": [
+                    "uploaded_pdfs\\Folleto CJN.pdf"
+                ]
+            }
+        ]
+    }
+}
