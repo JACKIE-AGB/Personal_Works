@@ -624,12 +624,12 @@ main {
 
 
 /* ─────────────────────────────────────────────
-   HERO — CARRUSEL DE IMÁGENES (PAISAJE CORREGIDO)
+   HERO — CARRUSEL DE IMÁGENES (CONSOLIDACIÓN DE ALTURA)
 ───────────────────────────────────────────── */
 
 .hero-carousel-section {
     width: 100%;
-    height: 420px; /* Incrementado para desplegar la toma completa de la presa con el cielo */
+    height: 440px; /* Se eleva e iguala para asegurar el render sin cortes */
     position: relative;
     background: #ebebeb;
     flex-shrink: 0;
@@ -639,7 +639,7 @@ main {
     position: absolute;
     inset: 0;
     background-size: cover;
-    background-position: top center; /* Prioriza y fija la parte superior de la imagen (el cielo) */
+    background-position: center center; /* Centrado absoluto para evitar recortes raros */
     background-repeat: no-repeat;
     background-color: #1a1a1a;
     opacity: 0;
@@ -678,7 +678,7 @@ main {
 
 .hero-indicators {
     position: absolute;
-    bottom: 24px; /* Empujado levemente hacia arriba del corte borroso */
+    bottom: 24px; 
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -703,7 +703,7 @@ main {
 
 
 /* ─────────────────────────────────────────────
-   ÁREA DE BÚSQUEDA Y SECCIÓN BORROSA (DESPLAZADOS)
+   ÁREA DE BÚSQUEDA Y SECCIÓN BORROSA (CONEXIÓN ADAPTATIVA)
 ───────────────────────────────────────────── */
 
 .below-hero-wrapper {
@@ -714,14 +714,14 @@ main {
     overflow: hidden;
     min-height: 0;
     width: 100%;
-    padding-bottom: 60px; /* Espacio para evitar superposición con el footer */
+    padding-bottom: 60px; /* Margen preventivo para el pie de página */
 }
 
 .search-area-wrapper {
     width: 100%;
     display: flex;
     justify-content: center;
-    padding: 40px 20px 40px; /* Más aire vertical para bajar la terminal de controles */
+    padding: 40px 20px 40px; /* Centrado holgado para los inputs y botones */
     box-sizing: border-box;
     position: relative;
     z-index: 2;
@@ -731,7 +731,7 @@ main {
     position: absolute;
     inset: -30px;
     background-size: cover;
-    background-position: top center; /* Sincronizado para un acople de espejo perfecto */
+    background-position: center center; /* Sincronizado exacto con el carrusel superior */
     background-repeat: no-repeat;
     background-color: #c0c0c0;
     filter: blur(28px) brightness(0.58);
@@ -825,7 +825,7 @@ footer {
         max-width: 88%;
     }
     .hero-carousel-section {
-        height: 280px; /* Adaptación proporcional para pantallas medianas */
+        height: 280px; 
     }
     .hero-placeholder-text {
         font-size: 36px;
@@ -851,7 +851,7 @@ footer {
         max-width: 220px;
     }
     .hero-carousel-section {
-        height: 200px; /* Adaptación para smartphones */
+        height: 200px; 
     }
     .hero-placeholder-text {
         font-size: 28px;
