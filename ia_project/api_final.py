@@ -17,13 +17,16 @@ import fitz  # PyMuPDF
 import base64
 import asyncio
 import json
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
-app = FastAPI(title="CFE Intelligent Document & Vision API", version="4.0")
+app = FastAPI(title="CFE Intelligent Document & Vision API", version="4.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -47,6 +50,7 @@ MAX_DOCUMENTS       = 100
 UPLOAD_DIR          = "uploaded_pdfs"
 INDICES_BASE_DIR    = "stored_conversations"
 METADATA_FILE       = os.path.join(INDICES_BASE_DIR, "conversations.json")
+TEMP_SESSIONS_FILE  = os.path.join(INDICES_BASE_DIR, "temp_sessions.json")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(INDICES_BASE_DIR, exist_ok=True)
@@ -78,6 +82,88 @@ def load_metadata() -> dict:
 def save_metadata(meta: dict):
     with open(METADATA_FILE, "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=4)
+
+# ==========================================================
+# GESTIÓN DE SESIONES TEMPORALES (para limpieza automática)
+# ==========================================================
+def load_temp_sessions() -> dict:
+    if os.path.exists(TEMP_SESSIONS_FILE):
+        try:
+            with open(TEMP_SESSIONS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_temp_sessions(sessions: dict):
+    with open(TEMP_SESSIONS_FILE, "w", encoding="utf-8") as f:
+        json.dump(sessions, f, ensure_ascii=False, indent=4)
+
+def register_temp_session(conversation_id: str):
+    """Registra una conversación como temporal (para limpieza automática)"""
+    sessions = load_temp_sessions()
+    sessions[conversation_id] = {
+        "created_at": datetime.now().isoformat(),
+        "last_accessed": datetime.now().isoformat()
+    }
+    save_temp_sessions(sessions)
+
+def unregister_temp_session(conversation_id: str):
+    """Elimina una conversación del registro temporal"""
+    sessions = load_temp_sessions()
+    if conversation_id in sessions:
+        del sessions[conversation_id]
+        save_temp_sessions(sessions)
+
+def cleanup_expired_sessions(max_age_hours: int = 24):
+    """Limpia sesiones temporales que han expirado"""
+    sessions = load_temp_sessions()
+    now = datetime.now()
+    expired = []
+    
+    for conv_id, data in sessions.items():
+        try:
+            created_at = datetime.fromisoformat(data["created_at"])
+            age_hours = (now - created_at).total_seconds() / 3600
+            if age_hours > max_age_hours:
+                expired.append(conv_id)
+        except Exception:
+            expired.append(conv_id)
+    
+    for conv_id in expired:
+        delete_conversation_files(conv_id)
+        if conv_id in sessions:
+            del sessions[conv_id]
+    
+    if expired:
+        save_temp_sessions(sessions)
+    
+    return len(expired)
+
+def delete_conversation_files(conversation_id: str):
+    """Elimina los archivos físicos de una conversación"""
+    conv_dir = os.path.join(INDICES_BASE_DIR, conversation_id)
+    if os.path.exists(conv_dir):
+        try:
+            shutil.rmtree(conv_dir)
+            print(f"🧹 Limpiados archivos de conversación: {conversation_id}")
+        except Exception as e:
+            print(f"⚠️ Error limpiando {conversation_id}: {e}")
+
+# Iniciar hilo de limpieza automática (cada hora)
+def start_cleanup_scheduler():
+    def cleanup_loop():
+        while True:
+            time.sleep(3600)  # Cada hora
+            cleaned = cleanup_expired_sessions(max_age_hours=24)
+            if cleaned > 0:
+                print(f"🧹 Limpieza automática: {cleaned} sesiones expiradas eliminadas")
+    
+    cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
+    cleanup_thread.start()
+
+# Iniciar el scheduler al cargar la aplicación
+start_cleanup_scheduler()
 
 # ==========================================================
 # EXTRACCIÓN RÁPIDA DE PÁGINAS PDF
@@ -181,14 +267,69 @@ def _process_single_pdf(file_path: str) -> list[Document]:
 # ==========================================================
 @app.get("/conversations/")
 async def list_conversations():
+    """Lista todas las conversaciones activas"""
     return load_metadata()
 
 @app.get("/conversations/{conversation_id}")
 async def get_conversation(conversation_id: str):
+    """Obtiene una conversación específica"""
     meta = load_metadata()
     if conversation_id not in meta:
         return JSONResponse(status_code=404, content={"error": "Conversación no encontrada"})
+    
+    # Actualizar último acceso para sesiones temporales
+    sessions = load_temp_sessions()
+    if conversation_id in sessions:
+        sessions[conversation_id]["last_accessed"] = datetime.now().isoformat()
+        save_temp_sessions(sessions)
+    
     return meta[conversation_id]
+
+@app.post("/delete_conversation/")
+async def delete_conversation(id: str = Form(...)):
+    """Elimina una conversación completamente (archivos + metadata)"""
+    meta = load_metadata()
+    
+    if id not in meta:
+        return JSONResponse(status_code=404, content={"error": "Conversación no encontrada"})
+    
+    # Eliminar archivos físicos del índice FAISS
+    conv_dir = os.path.join(INDICES_BASE_DIR, id)
+    if os.path.exists(conv_dir):
+        try:
+            shutil.rmtree(conv_dir)
+        except Exception as e:
+            print(f"⚠️ Error eliminando directorio {conv_dir}: {e}")
+    
+    # Eliminar metadata
+    del meta[id]
+    save_metadata(meta)
+    
+    # Eliminar de sesiones temporales si existe
+    unregister_temp_session(id)
+    
+    return {"message": f"✅ Conversación {id} eliminada correctamente"}
+
+@app.post("/cleanup_session/")
+async def cleanup_session(conversation_id: str = Form(...)):
+    """
+    Endpoint para limpiar una conversación temporal cuando el usuario cierra la pestaña.
+    Marca la conversación para eliminación automática después de 24 horas.
+    """
+    meta = load_metadata()
+    
+    if conversation_id in meta:
+        # Registrar como sesión temporal para limpieza automática
+        register_temp_session(conversation_id)
+        return {"message": f"✅ Sesión {conversation_id} marcada para limpieza automática"}
+    
+    return JSONResponse(status_code=404, content={"error": "Conversación no encontrada"})
+
+@app.post("/cleanup_all_temp/")
+async def cleanup_all_temp():
+    """Limpia todas las sesiones temporales expiradas (endpoint administrativo)"""
+    cleaned = cleanup_expired_sessions(max_age_hours=24)
+    return {"message": f"🧹 Limpieza completada: {cleaned} sesiones eliminadas"}
 
 # ==========================================================
 # ENDPOINTS: PROCESAMIENTO E INDEXACIÓN
@@ -221,7 +362,8 @@ async def upload_pdf(file: UploadFile = File(...)):
             "type": "pdf",
             "target_name": file.filename,
             "file_path": file_path,
-            "history": []
+            "history": [],
+            "created_at": datetime.now().isoformat()
         }
         save_metadata(meta)
 
@@ -283,7 +425,8 @@ async def index_folder(folder_path: str = Form(...)):
             "type": "folder",
             "target_name": folder_display_name,
             "file_path": folder_path,
-            "history": []
+            "history": [],
+            "created_at": datetime.now().isoformat()
         }
         save_metadata(meta)
 
@@ -345,6 +488,12 @@ Respuesta:"""
     meta[conversation_id]["history"].append({"role": "user", "content": question})
     meta[conversation_id]["history"].append({"role": "assistant", "content": result["result"], "sources": sources})
     save_metadata(meta)
+    
+    # Actualizar último acceso si es sesión temporal
+    sessions = load_temp_sessions()
+    if conversation_id in sessions:
+        sessions[conversation_id]["last_accessed"] = datetime.now().isoformat()
+        save_temp_sessions(sessions)
 
     return {"answer": result["result"], "sources": sources}
 
@@ -387,6 +536,12 @@ Respuesta:"""
     meta[conversation_id]["history"].append({"role": "user", "content": question})
     meta[conversation_id]["history"].append({"role": "assistant", "content": result["result"], "sources": sources})
     save_metadata(meta)
+    
+    # Actualizar último acceso si es sesión temporal
+    sessions = load_temp_sessions()
+    if conversation_id in sessions:
+        sessions[conversation_id]["last_accessed"] = datetime.now().isoformat()
+        save_temp_sessions(sessions)
 
     return {"answer": result["result"], "sources": sources}
 
@@ -404,6 +559,7 @@ async def preview_file(path: str):
 # ==========================================================
 @app.post("/clear_index/")
 async def clear_index():
+    """Limpia TODOS los índices y conversaciones"""
     for path in (UPLOAD_DIR, INDICES_BASE_DIR):
         if os.path.exists(path):
             try:
@@ -413,17 +569,24 @@ async def clear_index():
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(INDICES_BASE_DIR, exist_ok=True)
+    
+    # Limpiar también el registro de sesiones temporales
+    save_temp_sessions({})
+    
     return {"message": "✅ Índices de memoria, disco y archivos cargados eliminados."}
 
 @app.get("/health")
 async def health():
     meta = load_metadata()
+    sessions = load_temp_sessions()
     return {
         "active_conversations": len(meta),
+        "temp_sessions": len(sessions),
         "max_documents":  MAX_DOCUMENTS,
         "vision_model":   VISION_MODEL,
         "text_model":     TEXT_MODEL,
         "workers":        MAX_WORKERS,
+        "status": "healthy"
     }
 
 if __name__ == "__main__":

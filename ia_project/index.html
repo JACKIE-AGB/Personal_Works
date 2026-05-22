@@ -166,6 +166,20 @@
       text-decoration: underline;
     }
 
+    .conv-actions-btn {
+      background: none;
+      border: none;
+      color: #80868b;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 50%;
+      transition: background 0.2s, color 0.2s;
+    }
+    .conv-actions-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ff4d4d;
+    }
+
     /* ═══════════════════════════════════════════════
        CONTENEDOR PRINCIPAL
     ═══════════════════════════════════════════════ */
@@ -390,6 +404,43 @@
       background: #fafafa;
       border-bottom: 1px solid #eceff1;
     }
+
+    /* ═══════════════════════════════════════════════
+       BARRA FIJA PARA RESULTS VIEW
+    ═══════════════════════════════════════════════ */
+    #results-view {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow-y: auto;
+      background: white;
+    }
+
+    .results-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: white;
+      border-bottom: 1px solid var(--border, #dfe1e5);
+      padding: 14px 20px 0;
+    }
+
+    /* Asegurar que el área de pregunta permanezca visible */
+    .results-action-area {
+      position: sticky;
+      top: 110px;
+      background: white;
+      z-index: 99;
+      border-bottom: 1px solid #eceff1;
+    }
+
+    .results-body {
+      flex: 1;
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 24px 120px;
+    }
   </style>
 </head>
 <body>
@@ -504,7 +555,7 @@
                   <i class="fas fa-database"></i> Indexar Carpeta
                 </button>
                 <button class="action-btn ghost-btn" onclick="clearIndex()">
-                  <i class="fas fa-trash-alt"></i> Eliminar Índice
+                  <i class="fas fa-trash-alt"></i> Limpiar
                 </button>
               </div>
               <div id="folderStatus" class="status-badge" style="display:none"></div>
@@ -524,6 +575,9 @@
     <section id="results-view" style="display:none">
       <div class="results-header">
         <div class="results-search-row">
+          <button class="hamburger-btn" onclick="toggleSidebar()" title="Contraer / expandir menú" style="color: #5f6368 !important; text-shadow: none; margin-right: 4px;">
+            <i class="fas fa-bars"></i>
+          </button>
           <div class="logo-mini-cfe">
             <img
               src="logo.png"
@@ -547,7 +601,7 @@
               <i class="fas fa-camera camera-icon"></i>
             </div>
           </div>
-          </div>
+        </div>
 
         <div class="results-tabs-bar">
           <button class="results-tab active" id="rtabPdf" onclick="switchTab('pdf')">
@@ -557,9 +611,9 @@
             <i class="fas fa-folder-open"></i> Carpeta de Documentos
           </button>
         </div>
+        
+        <div id="panelContainerResults" class="results-action-area"></div>
       </div>
-
-      <div id="panelContainerResults" class="results-action-area"></div>
 
       <div class="results-body">
         <div id="aiOverview" class="ai-overview" style="display:none">
@@ -608,9 +662,50 @@ const CAROUSEL_IMAGES = [
 ];
 
 const CAROUSEL_INTERVAL_MS = 180000;
+const STORAGE_KEY = 'cfe_deleted_conversations';
 
 let currentHeroSlide = 0;
 let carouselTimer = null;
+
+// ==========================================================
+// PERSISTENCIA DE CONVERSACIONES ELIMINADAS
+// ==========================================================
+function getDeletedConversations() {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored ? JSON.parse(stored) : [];
+}
+
+function addDeletedConversation(id) {
+  const deleted = getDeletedConversations();
+  if (!deleted.includes(id)) {
+    deleted.push(id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(deleted));
+  }
+}
+
+function isConversationDeleted(id) {
+  return getDeletedConversations().includes(id);
+}
+
+// ==========================================================
+// LIMPIEZA AL CERRAR SESIÓN
+// ==========================================================
+async function notifySessionEnd() {
+  if (activeConversationId) {
+    try {
+      // Notificar al backend que esta conversación temporal puede ser limpiada
+      await fetch(`${API}/cleanup_session/?conversation_id=${activeConversationId}`, { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      }).catch(e => console.log("Cleanup notice sent"));
+    } catch(e) { console.log("Session end notice error"); }
+  }
+}
+
+// Registrar limpieza al cerrar pestaña/navegador
+window.addEventListener('beforeunload', () => {
+  notifySessionEnd();
+});
 
 function initCarousel() {
   const wrapper    = document.getElementById('heroSlidesWrapper');
@@ -711,7 +806,17 @@ async function fetchConversations() {
   try {
     const res = await fetch(`${API}/conversations/`);
     if (!res.ok) return;
-    conversationsCache = await res.json();
+    const allConversations = await res.json();
+    
+    // Filtrar conversaciones eliminadas según localStorage
+    const deletedIds = getDeletedConversations();
+    conversationsCache = {};
+    Object.entries(allConversations).forEach(([id, conv]) => {
+      if (!deletedIds.includes(id)) {
+        conversationsCache[id] = conv;
+      }
+    });
+    
     renderSidebar();
   } catch (e) {
     console.error("Error cargando historial de barra lateral", e);
@@ -731,10 +836,26 @@ function renderSidebar() {
     card.id = `sidebar-card-${conv.id}`;
     card.onclick = () => loadConversation(conv.id);
 
+    const cardHeader = document.createElement("div");
+    cardHeader.style.display = "flex";
+    cardHeader.style.justifyContent = "space-between";
+    cardHeader.style.alignItems = "center";
+    cardHeader.style.width = "100%";
+
     const titleDiv = document.createElement("div");
     titleDiv.className = "history-card-title";
     titleDiv.innerHTML = `<i class="fas fa-comment-alt" style="color:#9aa0a6; font-size:12px;"></i> ${conv.title}`;
-    card.appendChild(titleDiv);
+    cardHeader.appendChild(titleDiv);
+
+    const menuBtn = document.createElement("button");
+    menuBtn.className = "conv-actions-btn";
+    menuBtn.innerHTML = `<i class="fas fa-trash-alt"></i>`;
+    menuBtn.onclick = (e) => {
+      e.stopPropagation();
+      deleteConversation(conv.id);
+    };
+    cardHeader.appendChild(menuBtn);
+    card.appendChild(cardHeader);
 
     const subtextDiv = document.createElement("div");
     subtextDiv.className = "history-card-subtext";
@@ -752,13 +873,36 @@ function renderSidebar() {
   });
 }
 
+async function deleteConversation(id) {
+  if (confirm("¿Seguro que deseas eliminar esta conversación del historial?")) {
+    try {
+      // Intentar eliminar del backend
+      await fetch(`${API}/delete_conversation/?id=${id}`, { method: "POST" });
+    } catch (e) {
+      console.warn("No se pudo borrar en el servidor, eliminando localmente.", e);
+    }
+    
+    // Guardar en localStorage que esta conversación fue eliminada
+    addDeletedConversation(id);
+    
+    // Eliminar del cache local
+    delete conversationsCache[id];
+    
+    if (activeConversationId === id) {
+      newConversation();
+    } else {
+      renderSidebar();
+    }
+  }
+}
+
 async function loadConversation(id) {
   activeConversationId = id;
   const conv = conversationsCache[id];
   if (!conv) return;
 
   currentTab = conv.type;
-  chatMessages[currentTab] = conv.history;
+  chatMessages[currentTab] = conv.history || [];
 
   if (conv.type === "pdf") {
     pdfReady = true;
@@ -770,6 +914,7 @@ async function loadConversation(id) {
   showResultsView();
   renderHistory();
   refreshPdfBadge();
+  scrollToBottom();
 
   document.querySelectorAll(".history-card").forEach(el => el.classList.remove("active"));
   const activeCard = document.getElementById(`sidebar-card-${id}`);
@@ -787,17 +932,23 @@ function switchTab(tab) {
   const panelFolder = document.getElementById("panelFolder");
 
   if (container && panelPdf && panelFolder) {
-    container.appendChild(panelPdf);
-    container.appendChild(panelFolder);
+    // Mover los paneles al contenedor activo
+    if (panelPdf.parentNode !== container) container.appendChild(panelPdf);
+    if (panelFolder.parentNode !== container) container.appendChild(panelFolder);
   }
 
   panelPdf.style.display    = tab === "pdf"    ? "block" : "none";
   panelFolder.style.display = tab === "folder" ? "block" : "none";
 
-  document.getElementById("tabPdf").classList.toggle("active", tab === "pdf");
-  document.getElementById("tabFolder").classList.toggle("active", tab === "folder");
-  document.getElementById("rtabPdf").classList.toggle("active", tab === "pdf");
-  document.getElementById("rtabFolder").classList.toggle("active", tab === "folder");
+  const tabPdf = document.getElementById("tabPdf");
+  const tabFolder = document.getElementById("tabFolder");
+  const rtabPdf = document.getElementById("rtabPdf");
+  const rtabFolder = document.getElementById("rtabFolder");
+  
+  if (tabPdf) tabPdf.classList.toggle("active", tab === "pdf");
+  if (tabFolder) tabFolder.classList.toggle("active", tab === "folder");
+  if (rtabPdf) rtabPdf.classList.toggle("active", tab === "pdf");
+  if (rtabFolder) rtabFolder.classList.toggle("active", tab === "folder");
 
   renderHistory();
   refreshPdfBadge();
@@ -805,17 +956,18 @@ function switchTab(tab) {
 
 function refreshPdfBadge() {
   const b = document.getElementById("pdfActiveBadge");
-  if (pdfReady && pdfLoadedName) {
+  if (pdfReady && pdfLoadedName && b) {
     b.style.display = "inline-flex";
     b.textContent = `📄 PDF activo: ${pdfLoadedName}`;
-  } else {
+  } else if (b) {
     b.style.display = "none";
   }
 }
 
 function onPdfSelected() {
   pdfFile = document.getElementById("pdfFileInput").files[0] || null;
-  document.getElementById("pdfFileName").textContent = pdfFile ? pdfFile.name : "Sin archivo";
+  const fileNameSpan = document.getElementById("pdfFileName");
+  if (fileNameSpan) fileNameSpan.textContent = pdfFile ? pdfFile.name : "Sin archivo";
 }
 
 async function processPdf() {
@@ -847,7 +999,8 @@ async function processPdf() {
 }
 
 async function indexFolder() {
-  const path = document.getElementById("folderPathInput").value.trim();
+  const pathInput = document.getElementById("folderPathInput");
+  const path = pathInput ? pathInput.value.trim() : "";
   if (!path) {
     showStatus("folderStatus", "⚠️ Escribe una ruta válida", "warn");
     return;
@@ -877,16 +1030,19 @@ async function indexFolder() {
 function doSearch() {
   const inResults = document.getElementById("results-view").style.display !== "none";
   const input = document.getElementById(inResults ? "searchInputResults" : "searchInput");
-  const q = input.value.trim();
+  const q = input ? input.value.trim() : "";
   if (!q) return;
   showResultsView();
-  input.value = "";
+  if (input) input.value = "";
   askQuestion(q);
 }
 
-document.getElementById("searchInput").addEventListener("keydown", e => {
-  if (e.key === "Enter") doSearch();
-});
+const searchInput = document.getElementById("searchInput");
+if (searchInput) {
+  searchInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") doSearch();
+  });
+}
 
 async function askQuestion(q) {
   if (!activeConversationId) {
@@ -905,7 +1061,8 @@ async function askQuestion(q) {
 
   let endpoint;
   if (currentTab === "pdf") {
-    const style = document.getElementById("styleSelect").value;
+    const styleSelect = document.getElementById("styleSelect");
+    const style = styleSelect ? styleSelect.value : "normal";
     fd.append("style", style);
     endpoint = `${API}/ask_pdf/`;
   } else {
@@ -918,6 +1075,7 @@ async function askQuestion(q) {
     hideTyping();
     await fetchConversations();
     await loadConversation(activeConversationId);
+    scrollToBottom();
   } catch {
     hideTyping();
     alert("❌ Error crítico: No se pudo establecer conexión con la API.");
@@ -926,6 +1084,7 @@ async function askQuestion(q) {
 
 function renderHistory() {
   const container = document.getElementById("chatHistory");
+  if (!container) return;
   const msgs = chatMessages[currentTab] || [];
 
   container.innerHTML = msgs.map(m => `
@@ -934,9 +1093,9 @@ function renderHistory() {
         <i class="fas ${m.role === 'user' ? 'fa-user' : 'fa-robot'}"></i>
       </div>
       <div class="bubble-text">
-        <div>${m.content.replace(/\n/g, "<br>")}</div>
+        <div>${(m.content || "").replace(/\n/g, "<br>")}</div>
         ${m.sources && m.sources.length > 0 ? `
-          <div style="margin-top:12px;font-size:11px;color:var(--muted);border-top:1px dashed var(--border);padding-top:6px;">
+          <div style="margin-top:12px;font-size:11px;color:#70757a;border-top:1px dashed #dfe1e5;padding-top:6px;">
             <strong>Documentos Fuente (Clic para Vista Previa):</strong><br>
             ${m.sources.map(src => {
               const baseName = src.split(/[\\/]/).pop();
@@ -953,38 +1112,63 @@ function renderHistory() {
 }
 
 function showTyping() {
-  document.getElementById("aiOverview").style.display = "block";
-  document.getElementById("aiTyping").style.display = "flex";
+  const aiOverview = document.getElementById("aiOverview");
+  const aiTyping = document.getElementById("aiTyping");
+  if (aiOverview) aiOverview.style.display = "block";
+  if (aiTyping) aiTyping.style.display = "flex";
 }
 
 function hideTyping() {
-  document.getElementById("aiTyping").style.display = "none";
-  document.getElementById("aiOverview").style.display = "none";
+  const aiTyping = document.getElementById("aiTyping");
+  const aiOverview = document.getElementById("aiOverview");
+  if (aiTyping) aiTyping.style.display = "none";
+  if (aiOverview && !document.querySelector("#chatHistory .chat-bubble.assistant:last-child")) {
+    // Solo ocultar si no hay mensaje nuevo
+    aiOverview.style.display = "none";
+  }
 }
 
 function showResultsView() {
-  document.getElementById("main-view").style.display = "none";
-  document.getElementById("main-footer").style.display = "none";
-  document.getElementById("results-view").style.display = "block";
+  const mainView = document.getElementById("main-view");
+  const mainFooter = document.getElementById("main-footer");
+  const resultsView = document.getElementById("results-view");
+  
+  if (mainView) mainView.style.display = "none";
+  if (mainFooter) mainFooter.style.display = "none";
+  if (resultsView) resultsView.style.display = "flex";
+  
   switchTab(currentTab);
+  
+  // Scroll al top de resultados
+  if (resultsView) resultsView.scrollTop = 0;
 }
 
 function openPreview(encodedPath, fileName) {
   const path = decodeURIComponent(encodedPath);
-  document.getElementById("modalTitle").textContent = `Vista Previa Completa: ${fileName}`;
-  document.getElementById("previewIframe").src = `${API}/preview/?path=${encodeURIComponent(path)}`;
-  document.getElementById("previewModal").style.display = "flex";
+  const modalTitle = document.getElementById("modalTitle");
+  const previewIframe = document.getElementById("previewIframe");
+  const previewModal = document.getElementById("previewModal");
+  
+  if (modalTitle) modalTitle.textContent = `Vista Previa Completa: ${fileName}`;
+  if (previewIframe) previewIframe.src = `${API}/preview/?path=${encodeURIComponent(path)}`;
+  if (previewModal) previewModal.style.display = "flex";
 }
 
 function closePreview() {
-  document.getElementById("previewModal").style.display = "none";
-  document.getElementById("previewIframe").src = "";
+  const previewModal = document.getElementById("previewModal");
+  const previewIframe = document.getElementById("previewIframe");
+  if (previewModal) previewModal.style.display = "none";
+  if (previewIframe) previewIframe.src = "";
 }
 
 async function backToHome() {
-  document.getElementById("main-view").style.display = "flex";
-  document.getElementById("main-footer").style.display = "block";
-  document.getElementById("results-view").style.display = "none";
+  const mainView = document.getElementById("main-view");
+  const mainFooter = document.getElementById("main-footer");
+  const resultsView = document.getElementById("results-view");
+  
+  if (mainView) mainView.style.display = "flex";
+  if (mainFooter) mainFooter.style.display = "block";
+  if (resultsView) resultsView.style.display = "none";
 
   document.querySelectorAll(".history-card").forEach(el => el.classList.remove("active"));
 
@@ -1007,41 +1191,56 @@ async function newConversation() {
 
   const pdfInput = document.getElementById("pdfFileInput");
   if (pdfInput) pdfInput.value = "";
-  document.getElementById("pdfFileName").textContent = "Sin archivo";
-  document.getElementById("folderPathInput").value = "";
-  document.getElementById("searchInput").value = "";
-  document.getElementById("searchInputResults").value = "";
+  const pdfFileName = document.getElementById("pdfFileName");
+  if (pdfFileName) pdfFileName.textContent = "Sin archivo";
+  const folderPathInput = document.getElementById("folderPathInput");
+  if (folderPathInput) folderPathInput.value = "";
+  const searchInput1 = document.getElementById("searchInput");
+  const searchInput2 = document.getElementById("searchInputResults");
+  if (searchInput1) searchInput1.value = "";
+  if (searchInput2) searchInput2.value = "";
 
-  document.getElementById("pdfStatus").style.display = "none";
-  document.getElementById("folderStatus").style.display = "none";
-  document.getElementById("pdfActiveBadge").style.display = "none";
+  const pdfStatus = document.getElementById("pdfStatus");
+  const folderStatus = document.getElementById("folderStatus");
+  const pdfActiveBadge = document.getElementById("pdfActiveBadge");
+  
+  if (pdfStatus) pdfStatus.style.display = "none";
+  if (folderStatus) folderStatus.style.display = "none";
+  if (pdfActiveBadge) pdfActiveBadge.style.display = "none";
 
-  document.getElementById("main-view").style.display = "flex";
-  document.getElementById("main-footer").style.display = "block";
-  document.getElementById("results-view").style.display = "none";
+  const mainView = document.getElementById("main-view");
+  const mainFooter = document.getElementById("main-footer");
+  const resultsView = document.getElementById("results-view");
+  
+  if (mainView) mainView.style.display = "flex";
+  if (mainFooter) mainFooter.style.display = "block";
+  if (resultsView) resultsView.style.display = "none";
 
   document.querySelectorAll(".history-card").forEach(el => el.classList.remove("active"));
   switchTab("pdf");
   fetchConversations();
 }
 
-async function clearPdfChat() {
-  if (confirm("¿Seguro que deseas purgar la base de datos del servidor por completo?")) {
-    try {
-      await fetch(`${API}/clear_index/`, { method: "POST" });
-      newConversation();
-    } catch {
-      alert("Error limpiando el backend");
-    }
-  }
+function clearPdfChat() {
+  const pdfInput = document.getElementById("pdfFileInput");
+  if (pdfInput) pdfInput.value = "";
+  pdfFile = null;
+  const pdfFileName = document.getElementById("pdfFileName");
+  if (pdfFileName) pdfFileName.textContent = "Sin archivo";
+  const pdfStatus = document.getElementById("pdfStatus");
+  if (pdfStatus) pdfStatus.style.display = "none";
 }
 
-async function clearIndex() {
-  await clearPdfChat();
+function clearIndex() {
+  const folderInput = document.getElementById("folderPathInput");
+  if (folderInput) folderInput.value = "";
+  const folderStatus = document.getElementById("folderStatus");
+  if (folderStatus) folderStatus.style.display = "none";
 }
 
 function showStatus(id, msg, type) {
   const el = document.getElementById(id);
+  if (!el) return;
   el.style.display = "inline-flex";
   el.textContent = msg;
   el.className = `status-badge status-${type}`;
@@ -1049,8 +1248,13 @@ function showStatus(id, msg, type) {
 
 function scrollToBottom() {
   setTimeout(() => {
-    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-  }, 50);
+    const resultsView = document.getElementById("results-view");
+    const mainContent = document.querySelector('.main-app-content');
+    const scrollTarget = resultsView && resultsView.style.display !== "none" ? resultsView : mainContent;
+    if (scrollTarget) {
+      scrollTarget.scrollTo({ top: scrollTarget.scrollHeight, behavior: "smooth" });
+    }
+  }, 100);
 }
 </script>
 </body>
