@@ -67,9 +67,6 @@ MAX_WORKERS = min(8, (os.cpu_count() or 4) * 2)
 _executor   = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 GROQ_CONCURRENCY = 6
 
-# ==========================================================
-# GESTIÓN DE METADATOS DE CONVERSACIONES
-# ==========================================================
 def load_metadata() -> dict:
     if os.path.exists(METADATA_FILE):
         try:
@@ -83,9 +80,6 @@ def save_metadata(meta: dict):
     with open(METADATA_FILE, "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=4)
 
-# ==========================================================
-# GESTIÓN DE SESIONES TEMPORALES (para limpieza automática)
-# ==========================================================
 def load_temp_sessions() -> dict:
     if os.path.exists(TEMP_SESSIONS_FILE):
         try:

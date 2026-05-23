@@ -1,10 +1,10 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from langchain_text_splitters import CharacterTextSplitter        # ✅
-from langchain_community.vectorstores import FAISS                # ✅
+from langchain_text_splitters import CharacterTextSplitter        
+from langchain_community.vectorstores import FAISS                
 from langchain_classic.chains import RetrievalQA   
-from langchain_community.document_loaders import PyPDFLoader      # ✅
-# from langchain_openai import OpenAIEmbeddings, ChatOpenAI         # ✅
+from langchain_community.document_loaders import PyPDFLoader      
+# from langchain_openai import OpenAIEmbeddings, ChatOpenAI         
 from fastapi.responses import JSONResponse
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -60,7 +60,7 @@ async def upload_pdf(file: UploadFile = File(...)):
         return {"message": "PDF procesado correctamente"}
 
     except Exception as e:
-        # ✅ Ahora verás exactamente qué falló
+         Ahora verás exactamente qué falló
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/ask/")
