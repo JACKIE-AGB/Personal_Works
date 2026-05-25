@@ -759,19 +759,28 @@ function isConversationDeleted(id) {
   return getDeletedConversations().includes(id);
 }
 
-async function notifySessionEnd() {
-  if (activeConversationId) {
-    try {
-      await fetch(`${API}/cleanup_session/?conversation_id=${activeConversationId}`, { 
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
-      }).catch(e => console.log("Cleanup notice sent"));
-    } catch(e) { console.log("Session end notice error"); }
+// ── Limpieza total al cerrar el navegador/pestaña ──
+function clearAllSessionsBeacon() {
+  // sendBeacon garantiza que el POST llega aunque la página esté cerrándose
+  try {
+    navigator.sendBeacon(`${API}/clear_all_sessions/`);
+  } catch(e) {
+    // Fallback silencioso — el servidor limpiará en el próximo arranque
+    console.warn("sendBeacon no disponible:", e);
   }
 }
 
 window.addEventListener('beforeunload', () => {
-  notifySessionEnd();
+  // 1. Limpiar sidebar visualmente de forma inmediata
+  const container = document.getElementById("sidebarHistoryList");
+  if (container) container.innerHTML = "";
+  conversationsCache = {};
+
+  // 2. Borrar el registro local de conversaciones eliminadas
+  localStorage.removeItem(STORAGE_KEY);
+
+  // 3. Notificar al servidor para borrar índices y archivos subidos
+  clearAllSessionsBeacon();
 });
 
 function initCarousel() {

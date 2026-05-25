@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
+from contextlib import asynccontextmanager
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_classic.chains import RetrievalQA
@@ -27,7 +28,21 @@ from datetime import datetime
 
 load_dotenv()
 
-app = FastAPI(title="CFE Intelligent Document & Vision API", version="4.2")
+# =======================================
+# LIFESPAN: LIMPIEZA AL INICIO Y AL CIERRE
+# =======================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── STARTUP: limpiar datos de sesión anterior (cierre inesperado previo) ──
+    print("🚀 Servidor iniciado — limpiando datos de sesión anterior...")
+    delete_all_conversations()
+    start_cleanup_scheduler()
+    yield
+    # ── SHUTDOWN: limpiar todo al apagar el servidor limpiamente ──
+    print("🛑 Servidor apagado — eliminando todos los datos de sesión...")
+    delete_all_conversations()
+
+app = FastAPI(title="CFE Intelligent Document & Vision API", version="4.2", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -145,6 +160,42 @@ def delete_conversation_files(conversation_id: str):
         except Exception as e:
             print(f"⚠️ Error limpiando {conversation_id}: {e}")
 
+def delete_all_conversations():
+    """
+    Elimina TODOS los datos de sesión:
+      - conversations.json y temp_sessions.json
+      - Todos los directorios de índice FAISS en stored_conversations/
+      - Todos los archivos subidos en uploaded_pdfs/
+    Se llama al iniciar y al cerrar el servidor, y desde el endpoint /clear_all_sessions/.
+    """
+    # Limpiar archivos de metadatos
+    save_metadata({})
+    save_temp_sessions({})
+
+    # Eliminar todos los subdirectorios de índices FAISS
+    if os.path.exists(INDICES_BASE_DIR):
+        for item in os.listdir(INDICES_BASE_DIR):
+            item_path = os.path.join(INDICES_BASE_DIR, item)
+            if os.path.isdir(item_path):
+                try:
+                    shutil.rmtree(item_path)
+                except Exception as e:
+                    print(f"⚠️ Error eliminando índice {item_path}: {e}")
+
+    # Eliminar todos los archivos PDF subidos
+    if os.path.exists(UPLOAD_DIR):
+        for item in os.listdir(UPLOAD_DIR):
+            item_path = os.path.join(UPLOAD_DIR, item)
+            try:
+                if os.path.isfile(item_path):
+                    os.remove(item_path)
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+            except Exception as e:
+                print(f"⚠️ Error eliminando archivo subido {item_path}: {e}")
+
+    print("🧹 Limpieza total de sesión completada.")
+
 def start_cleanup_scheduler():
     def cleanup_loop():
         while True:
@@ -155,8 +206,6 @@ def start_cleanup_scheduler():
     
     cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
     cleanup_thread.start()
-
-start_cleanup_scheduler()
 
 # =======================================
 # EXTRACCIÓN RÁPIDA DE PÁGINAS PDF CON COOPERACIÓN DE CANCELACIÓN
@@ -630,6 +679,15 @@ async def clear_index():
     os.makedirs(INDICES_BASE_DIR, exist_ok=True)
     save_temp_sessions({})
     return {"message": "✅ Índices de memoria, disco y archivos cargados eliminados."}
+
+@app.post("/clear_all_sessions/")
+async def clear_all_sessions():
+    """
+    Endpoint llamado por el frontend cuando el navegador se cierra (beforeunload).
+    Elimina todas las conversaciones, índices FAISS y archivos PDF subidos.
+    """
+    delete_all_conversations()
+    return {"message": "✅ Todas las sesiones y archivos de sesión eliminados correctamente."}
 
 @app.get("/health")
 async def health():
