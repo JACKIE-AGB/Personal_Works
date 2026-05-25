@@ -373,6 +373,62 @@
     .close-modal:hover { color: #000000; }
     .modal-body { flex: 1; background: #525659; }
 
+    /* ─── Grupo input Carpeta Rediseñado ─── */
+    .folder-input-group {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      min-width: 200px;
+    }
+    .folder-input-group .folder-path-input {
+      flex: 1;
+      border-radius: 8px !important;
+    }
+    
+    .browse-folder-btn {
+      background: #f0a500 !important;
+      color: #ffffff !important;
+      border: 1px solid #d49000 !important;
+      border-radius: 8px !important;
+      padding: 10px 16px !important;
+      font-size: 14px !important;
+      font-weight: 500 !important;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+    .browse-folder-btn:hover {
+      background: #d49000 !important;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    .browse-folder-btn i {
+      font-size: 14px;
+    }
+
+    /* Botón de Cancelación de Lectura Homogéneo */
+    .cancel-process-btn {
+      background: #d32f2f !important;
+      color: #ffffff !important;
+      border: 1px solid #b71c1c !important;
+      border-radius: 8px !important;
+      padding: 10px 16px !important;
+      font-size: 14px !important;
+      font-weight: 500 !important;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+    .cancel-process-btn:hover {
+      background: #b71c1c !important;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
     .source-btn {
       background: #f1f3f4;
       border: 1px solid #dadce0;
@@ -436,9 +492,65 @@
       margin: 0 auto;
       padding: 24px 24px 120px;
     }
+
+    /* Almacén oculto para preservar los paneles antes del intercambio de pestañas */
+    #panels-repository {
+      display: none;
+    }
   </style>
 </head>
 <body>
+
+<div id="panels-repository">
+  <div id="panelPdf" class="action-panel">
+    <div class="action-row">
+      <label class="upload-label" for="pdfFileInput">
+        <i class="fas fa-upload"></i> Subir PDF
+        <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="onPdfSelected()" />
+      </label>
+      <span id="pdfFileName" class="filename-hint">Sin archivo</span>
+
+      <select id="styleSelect" class="style-select">
+        <option value="normal">Estilo: Normal</option>
+        <option value="amable">Estilo: Amable</option>
+        <option value="agresivo">Estilo: Directo</option>
+      </select>
+
+      <button class="action-btn primary-btn" onclick="processPdf()">
+        <i class="fas fa-cogs"></i> Procesar PDF
+      </button>
+      <button id="cancelPdfBtn" class="action-btn cancel-process-btn" onclick="cancelPdfProcessing()" style="display:none;">
+        <i class="fas fa-stop-circle"></i> Detener
+      </button>
+      <button class="action-btn ghost-btn" onclick="clearPdfChat()">
+        <i class="fas fa-trash"></i> Limpiar
+      </button>
+    </div>
+    <div id="pdfStatus" class="status-badge" style="display:none"></div>
+    <div id="pdfActiveBadge" class="status-badge status-ok" style="display:none"></div>
+  </div>
+
+  <div id="panelFolder" class="action-panel" style="display:none">
+    <div class="action-row">
+      <div class="folder-input-group">
+        <input type="text" id="folderPathInput" class="folder-path-input" placeholder="Ruta del directorio en el servidor..." />
+      </div>
+      <button class="action-btn browse-folder-btn" onclick="browseFolder()" title="Seleccionar carpeta desde el explorador de archivos">
+        <i class="fas fa-folder-open"></i> Buscar
+      </button>
+      <button class="action-btn primary-btn" onclick="indexFolder()">
+        <i class="fas fa-database"></i> Indexar Carpeta
+      </button>
+      <button id="cancelFolderBtn" class="action-btn cancel-process-btn" onclick="cancelFolderProcessing()" style="display:none;">
+        <i class="fas fa-stop-circle"></i> Detener
+      </button>
+      <button class="action-btn ghost-btn" onclick="clearIndex()">
+        <i class="fas fa-trash-alt"></i> Limpiar
+      </button>
+    </div>
+    <div id="folderStatus" class="status-badge" style="display:none"></div>
+  </div>
+</div>
 
 <div class="app-container">
 
@@ -493,75 +605,38 @@
         <div class="blurred-mirror-section" id="blurredMirror"></div>
 
         <div class="search-area-wrapper">
-        <div class="search-container">
-          <div class="search-box">
-            <i class="fas fa-search search-icon"></i>
-            <input
-              type="text"
-              class="search-input"
-              id="searchInput"
-              placeholder="Buscar o hacer una pregunta técnica..."
-            />
-            <div class="search-icons">
-              <i class="fas fa-microphone microphone-icon"></i>
-              <i class="fas fa-camera camera-icon"></i>
-            </div>
-          </div>
-
-          <div class="mode-tabs">
-            <button class="mode-tab active" id="tabPdf" onclick="switchTab('pdf')">
-              <i class="fas fa-file-pdf"></i> PDF Individual
-            </button>
-            <button class="mode-tab" id="tabFolder" onclick="switchTab('folder')">
-              <i class="fas fa-folder-open"></i> Carpeta de Documentos
-            </button>
-          </div>
-
-          <div id="panelContainerHome" class="panel-container">
-            <div id="panelPdf" class="action-panel">
-              <div class="action-row">
-                <label class="upload-label" for="pdfFileInput">
-                  <i class="fas fa-upload"></i> Subir PDF
-                  <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="onPdfSelected()" />
-                </label>
-                <span id="pdfFileName" class="filename-hint">Sin archivo</span>
-
-                <select id="styleSelect" class="style-select">
-                  <option value="normal">Estilo: Normal</option>
-                  <option value="amable">Estilo: Amable</option>
-                  <option value="agresivo">Estilo: Directo</option>
-                </select>
-
-                <button class="action-btn primary-btn" onclick="processPdf()">
-                  <i class="fas fa-cogs"></i> Procesar PDF
-                </button>
-                <button class="action-btn ghost-btn" onclick="clearPdfChat()">
-                  <i class="fas fa-trash"></i> Limpiar
-                </button>
+          <div class="search-container">
+            <div class="search-box">
+              <i class="fas fa-search search-icon"></i>
+              <input
+                type="text"
+                class="search-input"
+                id="searchInput"
+                placeholder="Buscar o hacer una pregunta técnica..."
+              />
+              <div class="search-icons">
+                <i class="fas fa-microphone microphone-icon"></i>
+                <i class="fas fa-camera camera-icon"></i>
               </div>
-              <div id="pdfStatus" class="status-badge" style="display:none"></div>
-              <div id="pdfActiveBadge" class="status-badge status-ok" style="display:none"></div>
             </div>
 
-            <div id="panelFolder" class="action-panel" style="display:none">
-              <div class="action-row">
-                <input type="text" id="folderPathInput" class="folder-path-input" placeholder="Ruta del directorio en el servidor..." />
-                <button class="action-btn primary-btn" onclick="indexFolder()">
-                  <i class="fas fa-database"></i> Indexar Carpeta
-                </button>
-                <button class="action-btn ghost-btn" onclick="clearIndex()">
-                  <i class="fas fa-trash-alt"></i> Limpiar
-                </button>
+            <div class="mode-tabs">
+              <button class="mode-tab active" id="tabPdf" onclick="switchTab('pdf')">
+                <i class="fas fa-file-pdf"></i> PDF Individual
+              </button>
+              <button class="mode-tab" id="tabFolder" onclick="switchTab('folder')">
+                <i class="fas fa-folder-open"></i> Carpeta de Documentos
+              </button>
+            </div>
+
+            <div id="panelContainerHome" class="panel-container">
               </div>
-              <div id="folderStatus" class="status-badge" style="display:none"></div>
+
+            <div class="search-buttons">
+              <button class="search-btn" onclick="doSearch()">Buscar con Google Engine</button>
+              <button class="search-btn">Me siento con suerte</button>
             </div>
           </div>
-
-          <div class="search-buttons">
-            <button class="search-btn" onclick="doSearch()">Buscar con Google Engine</button>
-            <button class="search-btn">Me siento con suerte</button>
-          </div>
-        </div>
         </div>
       </div>
 
@@ -607,7 +682,8 @@
           </button>
         </div>
         
-        <div id="panelContainerResults" class="results-action-area"></div>
+        <div id="panelContainerResults" class="results-action-area">
+          </div>
       </div>
 
       <div class="results-body">
@@ -662,9 +738,10 @@ const STORAGE_KEY = 'cfe_deleted_conversations';
 let currentHeroSlide = 0;
 let carouselTimer = null;
 
-// ==========================================================
-// PERSISTENCIA DE CONVERSACIONES ELIMINADAS
-// ==========================================================
+// Controladores de abortar peticiones (Lectura)
+let pdfAbortController = null;
+let folderAbortController = null;
+
 function getDeletedConversations() {
   const stored = localStorage.getItem(STORAGE_KEY);
   return stored ? JSON.parse(stored) : [];
@@ -682,13 +759,9 @@ function isConversationDeleted(id) {
   return getDeletedConversations().includes(id);
 }
 
-// ==========================================================
-// LIMPIEZA AL CERRAR SESIÓN
-// ==========================================================
 async function notifySessionEnd() {
   if (activeConversationId) {
     try {
-      // Notificar al backend que esta conversación temporal puede ser limpiada
       await fetch(`${API}/cleanup_session/?conversation_id=${activeConversationId}`, { 
         method: "POST",
         headers: { "Content-Type": "application/json" }
@@ -697,7 +770,6 @@ async function notifySessionEnd() {
   }
 }
 
-// Registrar limpieza al cerrar pestaña/navegador
 window.addEventListener('beforeunload', () => {
   notifySessionEnd();
 });
@@ -803,7 +875,6 @@ async function fetchConversations() {
     if (!res.ok) return;
     const allConversations = await res.json();
     
-    // Filtrar conversaciones eliminadas según localStorage
     const deletedIds = getDeletedConversations();
     conversationsCache = {};
     Object.entries(allConversations).forEach(([id, conv]) => {
@@ -871,16 +942,12 @@ function renderSidebar() {
 async function deleteConversation(id) {
   if (confirm("¿Seguro que deseas eliminar esta conversación del historial?")) {
     try {
-      // Intentar eliminar del backend
       await fetch(`${API}/delete_conversation/?id=${id}`, { method: "POST" });
     } catch (e) {
       console.warn("No se pudo borrar en el servidor, eliminando localmente.", e);
     }
     
-    // Guardar en localStorage que esta conversación fue eliminada
     addDeletedConversation(id);
-    
-    // Eliminar del cache local
     delete conversationsCache[id];
     
     if (activeConversationId === id) {
@@ -927,7 +994,6 @@ function switchTab(tab) {
   const panelFolder = document.getElementById("panelFolder");
 
   if (container && panelPdf && panelFolder) {
-    // Mover los paneles al contenedor activo
     if (panelPdf.parentNode !== container) container.appendChild(panelPdf);
     if (panelFolder.parentNode !== container) container.appendChild(panelFolder);
   }
@@ -971,12 +1037,20 @@ async function processPdf() {
     return;
   }
   showStatus("pdfStatus", "⏳ Procesando texto y analizando planos visualmente...", "info");
+  
+  const cancelBtn = document.getElementById("cancelPdfBtn");
+  if (cancelBtn) cancelBtn.style.display = "inline-flex";
 
+  pdfAbortController = new AbortController();
   const fd = new FormData();
   fd.append("file", pdfFile);
 
   try {
-    const res  = await fetch(`${API}/upload_pdf/`, { method: "POST", body: fd });
+    const res  = await fetch(`${API}/upload_pdf/`, { 
+      method: "POST", 
+      body: fd,
+      signal: pdfAbortController.signal
+    });
     const data = await res.json();
     if (res.ok) {
       pdfReady = true;
@@ -988,8 +1062,49 @@ async function processPdf() {
     } else {
       showStatus("pdfStatus", `❌ ${data.error}`, "error");
     }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      showStatus("pdfStatus", "🛑 Lectura e interpretación de PDF cancelada por el usuario.", "warn");
+    } else {
+      showStatus("pdfStatus", "❌ Error de conexión con el servidor backend", "error");
+    }
+  } finally {
+    if (cancelBtn) cancelBtn.style.display = "none";
+    pdfAbortController = null;
+  }
+}
+
+function cancelPdfProcessing() {
+  if (pdfAbortController) {
+    pdfAbortController.abort();
+  }
+}
+
+async function browseFolder() {
+  const btn = document.querySelector('.browse-folder-btn');
+  if (btn) {
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abriendo...';
+    btn.disabled = true;
+  }
+  try {
+    const res  = await fetch(`${API}/browse_folder/`, { method: "POST" });
+    const data = await res.json();
+
+    if (res.ok && data.path) {
+      document.getElementById("folderPathInput").value = data.path;
+      showStatus("folderStatus", `📁 Carpeta seleccionada: ${data.path}`, "ok");
+    } else if (res.ok && !data.path) {
+      // El usuario canceló el diálogo
+    } else {
+      showStatus("folderStatus", `❌ ${data.error || "No se pudo abrir el selector"}`, "error");
+    }
   } catch {
-    showStatus("pdfStatus", "❌ Error de conexión con el servidor backend", "error");
+    showStatus("folderStatus", "❌ Error de conexión con el servidor backend", "error");
+  } finally {
+    if (btn) {
+      btn.innerHTML = '<i class="fas fa-folder-open"></i> Buscar';
+      btn.disabled = false;
+    }
   }
 }
 
@@ -1002,11 +1117,19 @@ async function indexFolder() {
   }
   showStatus("folderStatus", "⏳ Indexando carpeta recursivamente (extrayendo planos)...", "info");
 
+  const cancelBtn = document.getElementById("cancelFolderBtn");
+  if (cancelBtn) cancelBtn.style.display = "inline-flex";
+
+  folderAbortController = new AbortController();
   const fd = new FormData();
   fd.append("folder_path", path);
 
   try {
-    const res  = await fetch(`${API}/index_folder/`, { method: "POST", body: fd });
+    const res  = await fetch(`${API}/index_folder/`, { 
+      method: "POST", 
+      body: fd,
+      signal: folderAbortController.signal
+    });
     const data = await res.json();
     if (res.ok) {
       folderReady = true;
@@ -1017,8 +1140,21 @@ async function indexFolder() {
     } else {
       showStatus("folderStatus", `❌ ${data.error}`, "error");
     }
-  } catch {
-    showStatus("folderStatus", "❌ Error de conexión con el servidor backend", "error");
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      showStatus("folderStatus", "🛑 Indexación del directorio cancelada por el usuario.", "warn");
+    } else {
+      showStatus("folderStatus", "❌ Error de conexión con el servidor backend", "error");
+    }
+  } finally {
+    if (cancelBtn) cancelBtn.style.display = "none";
+    folderAbortController = null;
+  }
+}
+
+function cancelFolderProcessing() {
+  if (folderAbortController) {
+    folderAbortController.abort();
   }
 }
 
@@ -1118,7 +1254,6 @@ function hideTyping() {
   const aiOverview = document.getElementById("aiOverview");
   if (aiTyping) aiTyping.style.display = "none";
   if (aiOverview && !document.querySelector("#chatHistory .chat-bubble.assistant:last-child")) {
-    // Solo ocultar si no hay mensaje nuevo
     aiOverview.style.display = "none";
   }
 }
@@ -1134,7 +1269,6 @@ function showResultsView() {
   
   switchTab(currentTab);
   
-  // Scroll al top de resultados
   if (resultsView) resultsView.scrollTop = 0;
 }
 

@@ -19,6 +19,7 @@ import asyncio
 import json
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from dotenv import load_dotenv
@@ -26,7 +27,7 @@ from datetime import datetime
 
 load_dotenv()
 
-app = FastAPI(title="CFE Intelligent Document & Vision API", version="4.1")
+app = FastAPI(title="CFE Intelligent Document & Vision API", version="4.2")
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,9 +41,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise ValueError("⛔ GROQ_API_KEY no encontrada en el archivo .env")
 
-# ==========================================================
+# =======================================
 # CONFIGURACIÓN DE MODELOS Y RUTAS PERSISTENTES
-# ==========================================================
+# =======================================
 VISION_MODEL = "llama-3.2-90b-vision-instruct"
 TEXT_MODEL   = "llama-3.3-70b-versatile"
 
@@ -62,10 +63,14 @@ embeddings = HuggingFaceEmbeddings(
     model_kwargs={"device": "cpu"},
 )
 
-# ── Pool de hilos ──
+# ── Pool de hilos y Control de Cancelación Activo ──
 MAX_WORKERS = min(8, (os.cpu_count() or 4) * 2)
 _executor   = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 GROQ_CONCURRENCY = 6
+
+# Diccionario global en memoria para registrar procesos en ejecución que pueden ser cancelados
+# Estructura: { "cancel_token_uuid": True/False }
+CANCELLATION_TOKENS = {}
 
 def load_metadata() -> dict:
     if os.path.exists(METADATA_FILE):
@@ -94,7 +99,6 @@ def save_temp_sessions(sessions: dict):
         json.dump(sessions, f, ensure_ascii=False, indent=4)
 
 def register_temp_session(conversation_id: str):
-    """Registra una conversación como temporal (para limpieza automática)"""
     sessions = load_temp_sessions()
     sessions[conversation_id] = {
         "created_at": datetime.now().isoformat(),
@@ -103,14 +107,12 @@ def register_temp_session(conversation_id: str):
     save_temp_sessions(sessions)
 
 def unregister_temp_session(conversation_id: str):
-    """Elimina una conversación del registro temporal"""
     sessions = load_temp_sessions()
     if conversation_id in sessions:
         del sessions[conversation_id]
         save_temp_sessions(sessions)
 
 def cleanup_expired_sessions(max_age_hours: int = 24):
-    """Limpia sesiones temporales que han expirado"""
     sessions = load_temp_sessions()
     now = datetime.now()
     expired = []
@@ -135,39 +137,40 @@ def cleanup_expired_sessions(max_age_hours: int = 24):
     return len(expired)
 
 def delete_conversation_files(conversation_id: str):
-    """Elimina los archivos físicos de una conversación"""
     conv_dir = os.path.join(INDICES_BASE_DIR, conversation_id)
     if os.path.exists(conv_dir):
         try:
             shutil.rmtree(conv_dir)
-            print(f"🧹 Limpiados archivos de conversación: {conversation_id}")
+            print(f"跑 Limpiados archivos de conversación: {conversation_id}")
         except Exception as e:
             print(f"⚠️ Error limpiando {conversation_id}: {e}")
 
-# Iniciar hilo de limpieza automática (cada hora)
 def start_cleanup_scheduler():
     def cleanup_loop():
         while True:
-            time.sleep(3600)  # Cada hora
+            time.sleep(3600)
             cleaned = cleanup_expired_sessions(max_age_hours=24)
             if cleaned > 0:
-                print(f"🧹 Limpieza automática: {cleaned} sesiones expiradas eliminadas")
+                print(f"跑 Limpieza automática: {cleaned} sesiones expiradas eliminadas")
     
     cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
     cleanup_thread.start()
 
-# Iniciar el scheduler al cargar la aplicación
 start_cleanup_scheduler()
 
-# ==========================================================
-# EXTRACCIÓN RÁPIDA DE PÁGINAS PDF
-# ==========================================================
-def _extract_pages_data(file_path: str) -> list[dict]:
+# =======================================
+# EXTRACCIÓN RÁPIDA DE PÁGINAS PDF CON COOPERACIÓN DE CANCELACIÓN
+# =======================================
+def _extract_pages_data(file_path: str, cancel_token: str = None) -> list[dict]:
     pages_data = []
     file_name  = os.path.basename(file_path)
 
     with fitz.open(file_path) as pdf:
         for page_num, page in enumerate(pdf):
+            # Verificación temprana de cancelación voluntaria
+            if cancel_token and CANCELLATION_TOKENS.get(cancel_token) == True:
+                break
+
             text       = page.get_text().strip()
             has_images = len(page.get_images()) > 0
             needs_vision = has_images and len(text) < 300
@@ -187,7 +190,11 @@ def _extract_pages_data(file_path: str) -> list[dict]:
             })
     return pages_data
 
-def _analyze_page(page_data: dict) -> Document:
+def _analyze_page(page_data: dict, cancel_token: str = None) -> Document:
+    # Si ya se canceló la operación globalmente, saltamos invocaciones costosas a Groq
+    if cancel_token and CANCELLATION_TOKENS.get(cancel_token) == True:
+        return None
+
     content = (
         f"ARCHIVO: {page_data['file_name']}\n"
         f"PÁGINA: {page_data['page_num'] + 1}\n"
@@ -224,23 +231,28 @@ def _analyze_page(page_data: dict) -> Document:
         metadata={"source": page_data["file_path"], "page": page_data["page_num"] + 1},
     )
 
-def extract_pdf_parallel(file_path: str) -> list[Document]:
-    pages_data = _extract_pages_data(file_path)
+def extract_pdf_parallel(file_path: str, cancel_token: str = None) -> list[Document]:
+    pages_data = _extract_pages_data(file_path, cancel_token)
     documents = [None] * len(pages_data)
 
     text_only  = [p for p in pages_data if not p["needs_vision"]]
     need_vision = [p for p in pages_data if p["needs_vision"]]
 
     for pd_item in text_only:
-        documents[pd_item["page_num"]] = _analyze_page(pd_item)
+        if cancel_token and CANCELLATION_TOKENS.get(cancel_token) == True:
+            return []
+        documents[pd_item["page_num"]] = _analyze_page(pd_item, cancel_token)
 
     if need_vision:
         with ThreadPoolExecutor(max_workers=GROQ_CONCURRENCY) as vis_pool:
             futures = {
-                vis_pool.submit(_analyze_page, pd_item): pd_item["page_num"]
+                vis_pool.submit(_analyze_page, pd_item, cancel_token): pd_item["page_num"]
                 for pd_item in need_vision
             }
             for future in as_completed(futures):
+                if cancel_token and CANCELLATION_TOKENS.get(cancel_token) == True:
+                    # Forzar el apagado temprano interrumpiendo lectura
+                    break
                 page_num = futures[future]
                 try:
                     documents[page_num] = future.result()
@@ -249,29 +261,41 @@ def extract_pdf_parallel(file_path: str) -> list[Document]:
 
     return [doc for doc in documents if doc is not None]
 
-def _process_single_pdf(file_path: str) -> list[Document]:
+def _process_single_pdf(file_path: str, cancel_token: str = None) -> list[Document]:
     try:
-        return extract_pdf_parallel(file_path)
+        if cancel_token and CANCELLATION_TOKENS.get(cancel_token) == True:
+            return []
+        return extract_pdf_parallel(file_path, cancel_token)
     except Exception as e:
         print(f"⚠️ Omitiendo {os.path.basename(file_path)}: {e}")
         return []
 
-# ==========================================================
+# =======================================
+# ENDPOINT DE CANCELACIÓN EN TIEMPO REAL
+# =======================================
+@app.post("/cancel_processing/")
+async def cancel_processing(cancel_token: str = Form(...)):
+    """
+    Establece el token de cancelación en True para abortar cualquier
+    bucle activo o pool de hilos asociado.
+    """
+    CANCELLATION_TOKENS[cancel_token] = True
+    print(f"🛑 Solicitud de cancelación recibida para el proceso: {cancel_token}")
+    return {"message": "✅ Señal de parada enviada exitosamente al hilo de procesamiento."}
+
+# =======================================
 # ENDPOINTS DE CONTROL DE CONVERSACIÓN
-# ==========================================================
+# =======================================
 @app.get("/conversations/")
 async def list_conversations():
-    """Lista todas las conversaciones activas"""
     return load_metadata()
 
 @app.get("/conversations/{conversation_id}")
 async def get_conversation(conversation_id: str):
-    """Obtiene una conversación específica"""
     meta = load_metadata()
     if conversation_id not in meta:
         return JSONResponse(status_code=404, content={"error": "Conversación no encontrada"})
     
-    # Actualizar último acceso para sesiones temporales
     sessions = load_temp_sessions()
     if conversation_id in sessions:
         sessions[conversation_id]["last_accessed"] = datetime.now().isoformat()
@@ -281,13 +305,10 @@ async def get_conversation(conversation_id: str):
 
 @app.post("/delete_conversation/")
 async def delete_conversation(id: str = Form(...)):
-    """Elimina una conversación completamente (archivos + metadata)"""
     meta = load_metadata()
-    
     if id not in meta:
         return JSONResponse(status_code=404, content={"error": "Conversación no encontrada"})
     
-    # Eliminar archivos físicos del índice FAISS
     conv_dir = os.path.join(INDICES_BASE_DIR, id)
     if os.path.exists(conv_dir):
         try:
@@ -295,53 +316,54 @@ async def delete_conversation(id: str = Form(...)):
         except Exception as e:
             print(f"⚠️ Error eliminando directorio {conv_dir}: {e}")
     
-    # Eliminar metadata
     del meta[id]
     save_metadata(meta)
-    
-    # Eliminar de sesiones temporales si existe
     unregister_temp_session(id)
-    
     return {"message": f"✅ Conversación {id} eliminada correctamente"}
 
 @app.post("/cleanup_session/")
 async def cleanup_session(conversation_id: str = Form(...)):
-    """
-    Endpoint para limpiar una conversación temporal cuando el usuario cierra la pestaña.
-    Marca la conversación para eliminación automática después de 24 horas.
-    """
     meta = load_metadata()
-    
     if conversation_id in meta:
-        # Registrar como sesión temporal para limpieza automática
         register_temp_session(conversation_id)
         return {"message": f"✅ Sesión {conversation_id} marcada para limpieza automática"}
-    
     return JSONResponse(status_code=404, content={"error": "Conversación no encontrada"})
 
 @app.post("/cleanup_all_temp/")
 async def cleanup_all_temp():
-    """Limpia todas las sesiones temporales expiradas (endpoint administrativo)"""
     cleaned = cleanup_expired_sessions(max_age_hours=24)
     return {"message": f"🧹 Limpieza completada: {cleaned} sesiones eliminadas"}
 
-# ==========================================================
+# =======================================
 # ENDPOINTS: PROCESAMIENTO E INDEXACIÓN
-# ==========================================================
+# =======================================
 @app.post("/upload_pdf/")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(file: UploadFile = File(...), cancel_token: str = Form(None)):
+    # Generar un token único en memoria si el cliente no mandó uno
+    if not cancel_token:
+        cancel_token = str(uuid.uuid4())
+    CANCELLATION_TOKENS[cancel_token] = False
+
     try:
         file_path = os.path.join(UPLOAD_DIR, file.filename)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
         loop = asyncio.get_event_loop()
-        raw_docs = await loop.run_in_executor(_executor, partial(extract_pdf_parallel, file_path))
+        raw_docs = await loop.run_in_executor(
+            _executor, 
+            partial(extract_pdf_parallel, file_path, cancel_token)
+        )
+
+        # Si durante la extracción de hilos se activó la cancelación, abortamos el guardado
+        if CANCELLATION_TOKENS.get(cancel_token) == True:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            return JSONResponse(status_code=499, content={"error": "Lectura de PDF cancelada por el usuario."})
 
         splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
         docs = splitter.split_documents(raw_docs)
 
-        # Crear Sesión y Guardar Base de Vectores propia
         meta = load_metadata()
         conv_idx = len(meta) + 1
         conv_id = f"conversacion_{conv_idx}"
@@ -369,11 +391,19 @@ async def upload_pdf(file: UploadFile = File(...)):
         }
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        # Limpieza de banderas de estado de cancelación
+        if cancel_token in CANCELLATION_TOKENS:
+            del CANCELLATION_TOKENS[cancel_token]
 
 @app.post("/index_folder/")
-async def index_folder(folder_path: str = Form(...)):
+async def index_folder(folder_path: str = Form(...), cancel_token: str = Form(None)):
     if not os.path.exists(folder_path):
         return JSONResponse(status_code=400, content={"error": "La ruta especificada no existe."})
+
+    if not cancel_token:
+        cancel_token = str(uuid.uuid4())
+    CANCELLATION_TOKENS[cancel_token] = False
 
     try:
         pdf_files = [
@@ -388,22 +418,28 @@ async def index_folder(folder_path: str = Form(...)):
         if len(pdf_files) > MAX_DOCUMENTS:
             return JSONResponse(status_code=400, content={"error": f"Límite excedido: máximo {MAX_DOCUMENTS} PDFs."})
 
-        loop = asyncio.get_event_loop()
-        futures = [loop.run_in_executor(_executor, _process_single_pdf, fp) for fp in pdf_files]
-        results = await asyncio.gather(*futures, return_exceptions=True)
-
         all_docs = []
-        for r in results:
-            if isinstance(r, list):
-                all_docs.extend(r)
+        loop = asyncio.get_event_loop()
+        
+        # Procesamiento secuencial/paralelo controlado para vigilar la interrupción entre archivos
+        for fp in pdf_files:
+            if CANCELLATION_TOKENS.get(cancel_token) == True:
+                break
+            
+            # Procesamos por lotes/archivos individuales mapeados al pool
+            res_docs = await loop.run_in_executor(_executor, _process_single_pdf, fp, cancel_token)
+            if isinstance(res_docs, list):
+                all_docs.extend(res_docs)
+
+        if CANCELLATION_TOKENS.get(cancel_token) == True:
+            return JSONResponse(status_code=499, content={"error": "Indexación del directorio cancelada por el usuario."})
 
         if not all_docs:
-            return JSONResponse(status_code=500, content={"error": "No se pudo extraer contenido."})
+            return JSONResponse(status_code=500, content={"error": "No se pudo extraer contenido o se interrumpió el proceso."})
 
         splitter = RecursiveCharacterTextSplitter(chunk_size=1800, chunk_overlap=200)
         docs     = splitter.split_documents(all_docs)
 
-        # Guardar Base de Vectores Dedicada
         meta = load_metadata()
         conv_idx = len(meta) + 1
         conv_id = f"conversacion_{conv_idx}"
@@ -431,10 +467,13 @@ async def index_folder(folder_path: str = Form(...)):
         }
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        if cancel_token in CANCELLATION_TOKENS:
+            del CANCELLATION_TOKENS[cancel_token]
 
-# ==========================================================
+# =======================================
 # ENDPOINTS: CONSULTAS (RAG)
-# ==========================================================
+# =======================================
 @app.post("/ask_pdf/")
 async def ask_pdf(question: str = Form(...), style: str = Form("normal"), conversation_id: str = Form(...)):
     meta = load_metadata()
@@ -478,12 +517,10 @@ Respuesta:"""
     result = await loop.run_in_executor(_executor, partial(chain.invoke, {"query": question}))
     sources = sorted(set(d.metadata["source"] for d in result["source_documents"]))
 
-    # Registrar en el Historial del JSON
     meta[conversation_id]["history"].append({"role": "user", "content": question})
     meta[conversation_id]["history"].append({"role": "assistant", "content": result["result"], "sources": sources})
     save_metadata(meta)
     
-    # Actualizar último acceso si es sesión temporal
     sessions = load_temp_sessions()
     if conversation_id in sessions:
         sessions[conversation_id]["last_accessed"] = datetime.now().isoformat()
@@ -531,7 +568,6 @@ Respuesta:"""
     meta[conversation_id]["history"].append({"role": "assistant", "content": result["result"], "sources": sources})
     save_metadata(meta)
     
-    # Actualizar último acceso si es sesión temporal
     sessions = load_temp_sessions()
     if conversation_id in sessions:
         sessions[conversation_id]["last_accessed"] = datetime.now().isoformat()
@@ -539,21 +575,50 @@ Respuesta:"""
 
     return {"answer": result["result"], "sources": sources}
 
-# ==========================================================
+# =======================================
 # ENDPOINT DE VISTA PREVIA DE DOCUMENTOS
-# ==========================================================
+# =======================================
 @app.get("/preview/")
 async def preview_file(path: str):
     if not os.path.exists(path):
         return JSONResponse(status_code=404, content={"error": f"Archivo no encontrado en la ruta: {path}"})
     return FileResponse(path, media_type="application/pdf")
 
-# ==========================================================
+# =======================================
+# SELECTOR NATIVO DE CARPETA (tkinter)
+# =======================================
+@app.post("/browse_folder/")
+async def browse_folder():
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()                      
+        root.wm_attributes('-topmost', 1)    
+
+        folder_path = filedialog.askdirectory(
+            title="Seleccionar carpeta de documentos PDF"
+        )
+        root.destroy()
+
+        if folder_path:
+            folder_path = os.path.normpath(folder_path)
+            return {"path": folder_path}
+        else:
+            return JSONResponse(status_code=200, content={"path": ""})
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"No se pudo abrir el selector de carpeta: {str(e)}"}
+        )
+
+# =======================================
 # CONTROL Y LIMPIEZA TOTAL
-# ==========================================================
+# =======================================
 @app.post("/clear_index/")
 async def clear_index():
-    """Limpia TODOS los índices y conversaciones"""
     for path in (UPLOAD_DIR, INDICES_BASE_DIR):
         if os.path.exists(path):
             try:
@@ -563,10 +628,7 @@ async def clear_index():
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(INDICES_BASE_DIR, exist_ok=True)
-    
-    # Limpiar también el registro de sesiones temporales
     save_temp_sessions({})
-    
     return {"message": "✅ Índices de memoria, disco y archivos cargados eliminados."}
 
 @app.get("/health")
