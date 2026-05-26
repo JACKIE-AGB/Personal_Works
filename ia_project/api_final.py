@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage
 from langchain_core.documents import Document
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from typing import List
 
 import tempfile
 import os
@@ -702,6 +703,92 @@ async def health():
         "workers":        MAX_WORKERS,
         "status": "healthy"
     }
+
+# =======================================
+# NUEVO: ENDPOINT PARA PROCESAR CARPETAS REMOTAS (MÚLTIPLES ARCHIVOS)
+# =======================================
+@app.post("/upload_folder_remote/")
+async def upload_folder_remote(files: List[UploadFile] = File(...), cancel_token: str = Form(None)):
+    """
+    Recibe múltiples archivos PDF simulando la subida de una carpeta completa 
+    desde el entorno web remoto.
+    """
+    if not cancel_token:
+        cancel_token = str(uuid.uuid4())
+    CANCELLATION_TOKENS[cancel_token] = False
+    
+    saved_paths = []
+    processed_docs_count = 0
+    conversation_id = str(uuid.uuid4()) # Creamos una nueva sesión para la carpeta
+    
+    try:
+        for file in files:
+            # Solo procesar si es un archivo PDF
+            if not file.filename.lower().endswith('.pdf'):
+                continue
+                
+            # Verificar si se ha cancelado el proceso en mitad de la subida
+            if CANCELLATION_TOKENS.get(cancel_token) == True:
+                print(f"🛑 Indexación de carpeta cancelada por el usuario.")
+                return JSONResponse(status_code=200, content={"message": "Proceso cancelado por el usuario"})
+
+            file_path = os.path.join(UPLOAD_DIR, file.filename)
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            saved_paths.append(file_path)
+
+        # Si no se encontraron PDFs válidos
+        if not saved_paths:
+            return JSONResponse(status_code=400, content={"error": "No se encontraron archivos PDF válidos en la carpeta subida."})
+
+        # Procesar los documentos de manera síncrona/asíncrona reutilizando tu lógica interna
+        all_documents = []
+        for path in saved_paths:
+            if CANCELLATION_TOKENS.get(cancel_token) == True:
+                break
+            docs = _process_single_pdf(path, cancel_token)
+            if docs:
+                all_documents.extend(docs)
+
+        if not all_documents:
+            return JSONResponse(status_code=400, content={"error": "No se pudo extraer texto de ningún documento técnico de la carpeta."})
+
+        # Separar en fragmentos e indexar en FAISS
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        final_splits = text_splitter.split_documents(all_documents)
+        
+        db = FAISS.from_documents(final_splits, embeddings)
+        conv_dir = os.path.join(INDICES_BASE_DIR, conversation_id)
+        os.makedirs(conv_dir, exist_ok=True)
+        db.save_local(conv_dir)
+        
+        # Guardar en metadatos
+        meta = load_metadata()
+        meta[conversation_id] = {
+            "title": f"Carpeta: Remota ({len(saved_paths)} PDFs)",
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "type": "folder"
+        }
+        save_metadata(meta)
+        
+        return {
+            "message": f"✅ Carpeta indexada con éxito. {len(saved_paths)} archivos cargados.",
+            "conversation_id": conversation_id
+        }
+
+    except Exception as e:
+        print(f"❌ Error al procesar carpeta remota: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+# =======================================
+# SERVIR FRONTEND DESDE EL MISMO PUERTO (URL FIJA)
+# =======================================
+from fastapi.staticfiles import StaticFiles
+
+# Montamos la carpeta actual para servir index.html, styles.css, etc.
+# Nota: Asegúrate de que 'index.html' esté en el mismo directorio de ejecución que api_final.py
+app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn

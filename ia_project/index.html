@@ -506,13 +506,7 @@
     <div class="action-row">
       <label class="upload-label" for="pdfFileInput">
         <i class="fas fa-upload"></i> Subir PDF
-        <input 
-        type="file" 
-        id="pdfFileInput" 
-        accept=".pdf"
-        style="display:none" 
-        onchange="onPdfSelected()"
-        
+        <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="onPdfSelected()" />
       </label>
       <span id="pdfFileName" class="filename-hint">Sin archivo</span>
 
@@ -536,15 +530,15 @@
     <div id="pdfActiveBadge" class="status-badge status-ok" style="display:none"></div>
   </div>
 
-  <div id="panelFolder" class="action-panel" style="display:none">
+<div id="panelFolder" class="action-panel" style="display:none">
     <div class="action-row">
-      <div class="folder-input-group">
-        <input type="text" id="folderPathInput" class="folder-path-input" placeholder="Ruta del directorio en el servidor..." />
-      </div>
-      <button class="action-btn browse-folder-btn" onclick="browseFolder()" title="Seleccionar carpeta desde el explorador de archivos">
-        <i class="fas fa-folder-open"></i> Buscar
-      </button>
-      <button class="action-btn primary-btn" onclick="indexFolder()">
+      <label class="upload-label" for="folderFileInput" style="background: #f0a500; border-color: #d49000;">
+        <i class="fas fa-folder-open"></i> Seleccionar Carpeta Web
+        <input type="file" id="folderFileInput" webkitdirectory directory multiple style="display:none" onchange="onFolderSelectedRemote()" />
+      </label>
+      <span id="folderNameHint" class="filename-hint">Sin carpeta seleccionada</span>
+
+      <button class="action-btn primary-btn" onclick="processFolderRemote()">
         <i class="fas fa-database"></i> Indexar Carpeta
       </button>
       <button id="cancelFolderBtn" class="action-btn cancel-process-btn" onclick="cancelFolderProcessing()" style="display:none;">
@@ -848,7 +842,7 @@ function toggleSidebar() {
   sidebar.classList.toggle('collapsed');
 }
 
-const API = "https://suffered-sympathy-serve-ministry.trycloudflare.com";
+const API = "https://smilies-birthday-collaborative-culture.trycloudflare.com";
 let currentTab = "pdf";
 
 let activeConversationId = null;
@@ -1399,6 +1393,97 @@ function scrollToBottom() {
       scrollTarget.scrollTo({ top: scrollTarget.scrollHeight, behavior: "smooth" });
     }
   }, 100);
+}
+
+let selectedFolderFiles = [];
+
+// Se ejecuta al elegir la carpeta en el explorador web
+function onFolderSelectedRemote() {
+  const folderInput = document.getElementById("folderFileInput");
+  const hint = document.getElementById("folderNameHint");
+  
+  if (folderInput.files.length > 0) {
+    selectedFolderFiles = Array.from(folderInput.files).filter(file => file.name.toLowerCase().endswith('.pdf') || file.name.toLowerCase().endsWith('.pdf'));
+    
+    // Obtener el nombre de la carpeta raíz si es posible
+    const samplePath = folderInput.files[0].webkitRelativePath;
+    const rootFolderName = samplePath ? samplePath.split('/')[0] : "Carpeta";
+    
+    hint.textContent = `📁 ${rootFolderName} (${selectedFolderFiles.length} PDFs detectados)`;
+    showStatus("folderStatus", "✅ Carpeta cargada en el navegador lista para indexar.", "ok");
+  } else {
+    hint.textContent = "Sin carpeta seleccionada";
+    selectedFolderFiles = [];
+  }
+}
+
+// Envía recursivamente/masivamente los archivos de la carpeta al API remoto
+async function processFolderRemote() {
+  if (selectedFolderFiles.length === 0) {
+    showStatus("folderStatus", "⚠️ Por favor, selecciona una carpeta con archivos PDF válidos primero.", "error");
+    return;
+  }
+
+  const folderStatus = document.getElementById("folderStatus");
+  const cancelBtn = document.getElementById("cancelFolderBtn");
+  
+  folderStatus.style.display = "inline-flex";
+  folderStatus.textContent = "⚙️ Subiendo e Indexando Carpeta en Remoto (esto puede demorar)...";
+  folderStatus.className = "status-badge status-loading";
+  cancelBtn.style.display = "inline-block";
+
+  const currentToken = Utils.generateUUID(); // Asegúrate de tener tu generador o usa uno simple temporal:
+  const cancelToken = currentToken || Math.random().toString(36).substring(2);
+  
+  const formData = new FormData();
+  formData.append("cancel_token", cancelToken);
+  
+  // Adjuntar cada archivo detectado en la estructura
+  selectedFolderFiles.forEach(file => {
+    formData.append("files", file);
+  });
+
+  try {
+    folderAbortController = new AbortController();
+    const response = await fetch(`${API}/upload_folder_remote/`, {
+      method: "POST",
+      body: formData,
+      signal: folderAbortController.signal
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      showStatus("folderStatus", data.message, "ok");
+      // Activar conversación con el ID devuelto por el servidor
+      if (data.conversation_id) {
+        activeConversationId = data.conversation_id;
+        if (typeof fetchConversations === "function") fetchConversations();
+        if (typeof switchTab === "function") switchTab("folder");
+      }
+    } else {
+      showStatus("folderStatus", `❌ Error: ${data.error || 'No se pudo procesar la carpeta.'}`, "error");
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      showStatus("folderStatus", "🛑 Procesamiento de carpeta cancelado.", "error");
+    } else {
+      showStatus("folderStatus", `❌ Error de red: ${error.message}`, "error");
+    }
+  } finally {
+    cancelBtn.style.display = "none";
+  }
+}
+
+// Sobrescribir la función de limpiar existente para resetear variables nuevas
+function clearIndex() {
+  const folderInput = document.getElementById("folderFileInput");
+  if (folderInput) folderInput.value = "";
+  const hint = document.getElementById("folderNameHint");
+  if (hint) hint.textContent = "Sin carpeta seleccionada";
+  selectedFolderFiles = [];
+  const folderStatus = document.getElementById("folderStatus");
+  if (folderStatus) folderStatus.style.display = "none";
 }
 </script>
 </body>
