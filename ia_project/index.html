@@ -506,7 +506,13 @@
     <div class="action-row">
       <label class="upload-label" for="pdfFileInput">
         <i class="fas fa-upload"></i> Subir PDF
-        <input type="file" id="pdfFileInput" accept=".pdf" style="display:none" onchange="onPdfSelected()" />
+        <input 
+        type="file" 
+        id="pdfFileInput" 
+        accept=".pdf"
+        style="display:none" 
+        onchange="onPdfSelected()"
+        
       </label>
       <span id="pdfFileName" class="filename-hint">Sin archivo</span>
 
@@ -842,7 +848,7 @@ function toggleSidebar() {
   sidebar.classList.toggle('collapsed');
 }
 
-const API = "http://127.0.0.1:8001";
+const API = "https://suffered-sympathy-serve-ministry.trycloudflare.com";
 let currentTab = "pdf";
 
 let activeConversationId = null;
