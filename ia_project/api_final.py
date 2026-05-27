@@ -61,7 +61,7 @@ if not GROQ_API_KEY:
 VISION_MODEL = "llama-3.2-90b-vision-instruct"
 TEXT_MODEL   = "llama-3.3-70b-versatile"
 
-MAX_DOCUMENTS       = 100
+MAX_DOCUMENTS       = 150
 UPLOAD_DIR          = "uploaded_pdfs"
 INDICES_BASE_DIR    = "stored_conversations"
 METADATA_FILE       = os.path.join(INDICES_BASE_DIR, "conversations.json")

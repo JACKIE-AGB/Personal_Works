@@ -1013,7 +1013,7 @@
 </div>
 
 <script>
-const API = "https://ipod-payments-fundamental-loans.trycloudflare.com";
+const API = "https://tim-chief-quad-menu.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1052,7 +1052,8 @@ function clearAllSessionsBeacon() {
 window.addEventListener('beforeunload', () => {
   document.getElementById("sidebarHistoryList").innerHTML = "";
   conversationsCache = {};
-  localStorage.removeItem(STORAGE_KEY);
+  // NOTA: No limpiamos STORAGE_KEY para que las conversaciones eliminadas
+  // permanezcan borradas incluso si se recarga la página.
   clearAllSessionsBeacon();
 });
 
@@ -1133,7 +1134,11 @@ function renderSidebar() {
 
 async function deleteConversation(id) {
   if (confirm("¿Seguro que deseas eliminar esta conversación?")) {
-    try { await fetch(`${API}/delete_conversation/?id=${id}`, { method: "POST" }); } catch(e) {}
+    try {
+      const fd = new FormData();
+      fd.append("id", id);
+      await fetch(`${API}/delete_conversation/`, { method: "POST", body: fd });
+    } catch(e) { console.error("Error eliminando conversación:", e); }
     addDeletedConversation(id);
     delete conversationsCache[id];
     if (activeConversationId === id) newConversation();
@@ -1232,7 +1237,10 @@ function onFolderSelectedRemote() {
     const samplePath = folderInput.files[0].webkitRelativePath;
     const rootFolderName = samplePath ? samplePath.split('/')[0] : "Carpeta";
     hint.textContent = `📁 ${rootFolderName} (${selectedFolderFiles.length} PDFs)`;
-    showStatus("folderStatus", `✅ ${selectedFolderFiles.length} PDFs encontrados`, "ok");
+    const limitMsg = selectedFolderFiles.length > 150
+      ? ` — ⚠️ Excede el límite de 150`
+      : ` — ✅ Dentro del límite (máx. 150)`;
+    showStatus("folderStatus", `✅ ${selectedFolderFiles.length} PDFs encontrados${limitMsg}`, selectedFolderFiles.length > 150 ? "warn" : "ok");
   } else {
     hint.textContent = "Sin carpeta seleccionada";
     selectedFolderFiles = [];
@@ -1242,6 +1250,10 @@ function onFolderSelectedRemote() {
 async function processFolderRemote() {
   if (selectedFolderFiles.length === 0) {
     showStatus("folderStatus", "⚠️ Selecciona una carpeta con PDFs", "warn");
+    return;
+  }
+  if (selectedFolderFiles.length > 150) {
+    showStatus("folderStatus", `⚠️ Límite de 150 PDFs por carpeta. Se encontraron ${selectedFolderFiles.length}. Selecciona una subcarpeta con menos documentos.`, "warn");
     return;
   }
   showStatus("folderStatus", "⚙️ Indexando carpeta (puede demorar)...", "info");
