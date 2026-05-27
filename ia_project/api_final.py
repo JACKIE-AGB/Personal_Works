@@ -11,6 +11,7 @@ from langchain_core.documents import Document
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from typing import List
+from pathlib import Path
 
 import tempfile
 import os
@@ -63,6 +64,9 @@ TEXT_MODEL   = "llama-3.3-70b-versatile"
 
 MAX_DOCUMENTS       = 150
 UPLOAD_DIR          = "uploaded_pdfs"
+XAMPP_DOCS_PATH     = r"C:\xampp\htdocs\ia_docs"
+APACHE_BASE_URL     ="http://localhost/ia_docs"
+SUPPORTED_EXTENSIONS = [".pdf"]
 INDICES_BASE_DIR    = "stored_conversations"
 METADATA_FILE       = os.path.join(INDICES_BASE_DIR, "conversations.json")
 TEMP_SESSIONS_FILE  = os.path.join(INDICES_BASE_DIR, "temp_sessions.json")
@@ -298,6 +302,147 @@ def _process_single_pdf(file_path: str, cancel_token: str = None) -> list[Docume
         print(f"⚠️ Omitiendo {os.path.basename(file_path)}: {e}")
         return []
 
+# =======================================
+# ESCANEAR DOCUMENTOS EN XAMPP/APACHE
+# =======================================
+
+def scan_xampp_documents():
+    documents = []
+
+    if not os.path.exists(XAMPP_DOCS_PATH):
+        return documents
+
+    for root, dirs, files in os.walk(XAMPP_DOCS_PATH):
+
+        for file in files:
+            ext = os.path.splitext(file)[1].lower()
+
+            if ext not in SUPPORTED_EXTENSIONS:
+                continue
+
+            full_path = os.path.join(root, file)
+
+            relative_path = os.path.relpath(full_path, XAMPP_DOCS_PATH)
+
+            documents.append({
+                "name": file,
+                "relative_path": relative_path.replace("\\", "/"),
+                "full_path": full_path,
+                "type": "file",
+                "url": f"{APACHE_BASE_URL}/{relative_path.replace(os.sep, '/')}"
+            })
+
+    return documents
+
+@app.get("/xampp_documents/")
+async def xampp_documents():
+    docs = scan_xampp_documents()
+
+    return {
+        "total": len(docs),
+        "documents": docs
+    }
+
+# =======================================
+# INDEXAR DOCUMENTO DE XAMPP
+# =======================================
+
+@app.post("/index_xampp_document/")
+async def index_xampp_document(path: str = Form(...)):
+
+    full_path = os.path.join(XAMPP_DOCS_PATH, path)
+
+    if not os.path.exists(full_path):
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Documento no encontrado"}
+        )
+
+    try:
+
+        ext = os.path.splitext(full_path)[1].lower()
+
+        raw_docs = []
+
+        # ======================
+        # PDF
+        # ======================
+
+        if ext == ".pdf":
+            raw_docs = extract_pdf_parallel(full_path)
+
+        # ======================
+        # TXT
+        # ======================
+
+        elif ext == ".txt":
+
+            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+
+            raw_docs = [
+                Document(
+                    page_content=content,
+                    metadata={
+                        "source": full_path,
+                        "page": 1
+                    }
+                )
+            ]
+
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Formato no soportado"}
+            )
+
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1500,
+            chunk_overlap=200
+        )
+
+        docs = splitter.split_documents(raw_docs)
+
+        meta = load_metadata()
+
+        conv_idx = len(meta) + 1
+
+        conv_id = f"xampp_{conv_idx}"
+
+        conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
+
+        vectorstore = FAISS.from_documents(docs, embeddings)
+
+        vectorstore.save_local(conv_dir)
+
+        file_name = os.path.basename(full_path)
+
+        meta[conv_id] = {
+            "id": conv_id,
+            "title": file_name,
+            "type": "xampp",
+            "target_name": file_name,
+            "file_path": full_path,
+            "history": [],
+            "created_at": datetime.now().isoformat()
+        }
+
+        save_metadata(meta)
+
+        register_temp_session(conv_id)
+
+        return {
+            "conversation_id": conv_id,
+            "message": "✅ Documento XAMPP indexado correctamente"
+        }
+
+    except Exception as e:
+
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+    
 # =======================================
 # ENDPOINTS DE CONVERSACIÓN
 # =======================================

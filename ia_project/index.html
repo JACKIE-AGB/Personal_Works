@@ -894,9 +894,16 @@
     <button class="new-chat-btn" onclick="newConversation()">
       <i class="fas fa-plus"></i> Nueva conversación
     </button>
-    <div class="sidebar-menu-item"><i class="fas fa-search"></i> Buscar conversaciones</div>
+    <div class="sidebar-menu-item" onclick="loadXamppDocuments()">
+      <i class="fas fa-search"></i> Documentos XAMPP
+    </div>
     <div class="sidebar-menu-item"><i class="fas fa-book-bookmark"></i> Biblioteca</div>
-    <div class="sidebar-section-title">Recientes</div>
+    <div class="sidebar-section-title">Documentos XAMPP</div>
+
+    <div class="history-list" id="xamppDocumentsList"></div>
+
+    <div class="sidebar-section-title">Conversaciones</div>
+
     <div class="history-list" id="sidebarHistoryList"></div>
   </aside>
 
@@ -1013,7 +1020,7 @@
 </div>
 
 <script>
-const API = "https://workout-showtimes-humanities-gained.trycloudflare.com";
+const API = "https://ethernet-optimization-takes-adipex.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1031,6 +1038,7 @@ let chatMessages = { pdf: [], folder: [] };
 let pdfAbortController = null;
 let folderAbortController = null;
 let selectedFolderFiles = [];
+let xamppDocuments = [];
 
 function getDeletedConversations() {
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -1092,6 +1100,85 @@ function syncBlurred(imageUrl) {
   if (blurred) blurred.style.backgroundImage = `url('${imageUrl}')`;
 }
 
+// ======================================
+// CARGAR DOCUMENTOS XAMPP
+// ======================================
+
+async function loadXamppDocuments() {
+
+  try {
+
+    const res = await fetch(`${API}/xampp_documents/`);
+
+    const data = await res.json();
+
+    xamppDocuments = data.documents || [];
+
+    renderXamppDocuments();
+
+  } catch(err) {
+
+    console.error("Error cargando documentos XAMPP:", err);
+
+  }
+
+}
+
+// ======================================
+// RENDER DOCUMENTOS XAMPP
+// ======================================
+
+function renderXamppDocuments() {
+
+  const container = document.getElementById("xamppDocumentsList");
+
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (xamppDocuments.length === 0) {
+
+    container.innerHTML = `
+      <div class="history-card">
+        <div class="history-card-title">
+          Sin documentos
+        </div>
+      </div>
+    `;
+
+    return;
+  }
+
+  xamppDocuments.forEach(doc => {
+
+    const icon =
+      doc.name.endsWith(".pdf")
+      ? "fa-file-pdf"
+      : "fa-file-lines";
+
+    const div = document.createElement("div");
+
+    div.className = "history-card";
+
+    div.innerHTML = `
+      <div class="history-card-title">
+        <i class="fas ${icon}" style="color:#9aa0a6;"></i>
+        ${doc.name}
+      </div>
+
+      <div class="history-card-subtext">
+        ${doc.relative_path}
+      </div>
+    `;
+
+    div.onclick = () => selectXamppDocument(doc);
+
+    container.appendChild(div);
+
+  });
+
+}
+
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('collapsed');
 }
@@ -1115,7 +1202,7 @@ function renderSidebar() {
   container.innerHTML = "";
   Object.values(conversationsCache).reverse().forEach(conv => {
     const isSelected = conv.id === activeConversationId ? "active" : "";
-    const icon = conv.type === "pdf" ? "fa-file-pdf" : "fa-folder-open";
+    const icon = conv.type === "folder" ? "fa-folder-open": "fa-file-pdf";
     const card = document.createElement("div");
     card.className = `history-card ${isSelected}`;
     card.onclick = () => loadConversation(conv.id);
@@ -1161,6 +1248,69 @@ async function loadConversation(id) {
   renderSidebar();
 }
 
+// ======================================
+// SELECCIONAR DOCUMENTO XAMPP
+// ======================================
+
+async function selectXamppDocument(doc) {
+
+  try {
+
+    showResultsView();
+
+    document.getElementById("chatHistory").innerHTML = "";
+
+    document.getElementById("aiOverview").style.display = "block";
+
+    showTyping(true);
+
+    const fd = new FormData();
+
+    fd.append("path", doc.relative_path);
+
+    const res = await fetch(`${API}/index_xampp_document/`, {
+      method: "POST",
+      body: fd
+    });
+
+    const data = await res.json();
+
+    showTyping(false);
+
+    if (!res.ok) {
+
+      alert(data.error || "Error indexando documento");
+
+      return;
+    }
+
+    activeConversationId = data.conversation_id;
+
+    pdfReady = true;
+
+    pdfLoadedName = doc.name;
+
+    await fetchConversations();
+
+    await loadConversation(activeConversationId);
+
+    addMessage(
+      "assistant",
+      `✅ Documento cargado correctamente.\n\nAhora puedes preguntarme sobre:\n${doc.name}`
+    );
+
+  } catch(err) {
+
+    showTyping(false);
+
+    console.error(err);
+
+    alert("Error conectando con la API");
+
+  }
+
+}
+
 function switchTab(tab) {
   currentTab = tab;
   const inResults = document.getElementById("results-view").style.display !== "none";
@@ -1184,6 +1334,16 @@ function switchTab(tab) {
   }
   renderHistory();
   refreshPdfBadge();
+}
+
+function showTyping(show) {
+
+  const typing = document.getElementById("aiTyping");
+
+  if (!typing) return;
+
+  typing.style.display = show ? "flex" : "none";
+
 }
 
 function refreshPdfBadge() {
@@ -1312,7 +1472,10 @@ async function askQuestion(q) {
   fd.append("question", q);
   fd.append("conversation_id", activeConversationId);
   let endpoint;
-  if (currentTab === "pdf") {
+  if (
+    currentTab === "pdf" ||
+    currentTab === "xampp"
+    ) {
     const style = document.getElementById("styleSelect")?.value || "normal";
     fd.append("style", style);
     endpoint = `${API}/ask_pdf/`;
@@ -1439,6 +1602,7 @@ function initTransparentHeader() {
 
 window.addEventListener("DOMContentLoaded", () => {
   initCarousel();
+  loadXamppDocuments();
   switchTab("pdf");
   fetchConversations();
   initTransparentHeader();
