@@ -103,21 +103,27 @@ CANCELLATION_TOKENS = {}
 def preindex_xampp_documents():
     """
     Escanea y pre-indexa TODOS los documentos XAMPP al iniciar el servidor.
-    Esto evita tener que procesarlos en tiempo real cuando el usuario los selecciona.
+    SOLO crea los índices, NO crea conversaciones en la barra lateral.
     """
     print("\n" + "="*60)
-    print("📚 PRE-INDEXADO DE DOCUMENTOS XAMPP")
+    print("📚 PRE-INDEXADO DE DOCUMENTOS XAMPP (SIN CONVERSACIONES)")
     print("="*60)
     
     if not os.path.exists(XAMPP_DOCS_PATH):
         print(f"⚠️ Ruta XAMPP no encontrada: {XAMPP_DOCS_PATH}")
         return 0
     
-    meta = load_metadata()
+    # Cargar solo índices existentes (NO conversaciones)
+    indices_path = os.path.join(INDICES_BASE_DIR, "xampp_indices.json")
+    if os.path.exists(indices_path):
+        with open(indices_path, "r", encoding="utf-8") as f:
+            preindexed_docs = json.load(f)
+    else:
+        preindexed_docs = {}
+    
     indexed_count = 0
     skipped_count = 0
     
-    # Escanear todos los documentos
     for root, dirs, files in os.walk(XAMPP_DOCS_PATH):
         for file in files:
             ext = os.path.splitext(file)[1].lower()
@@ -126,23 +132,19 @@ def preindex_xampp_documents():
             
             full_path = os.path.join(root, file)
             relative_path = os.path.relpath(full_path, XAMPP_DOCS_PATH)
+            doc_key = f"xampp_{relative_path.replace('/', '_').replace('\\', '_').replace('.', '_')}"
             
-            # Generar ID único basado en la ruta relativa
-            doc_id = f"xampp_{relative_path.replace('/', '_').replace('\\', '_').replace('.', '_')}"
-            
-            # Verificar si ya está indexado y si el archivo ha cambiado
-            if doc_id in meta:
-                # Check if file was modified since last index
-                stored_path = meta[doc_id].get("file_path", "")
+            # Verificar si ya está pre-indexado
+            if doc_key in preindexed_docs:
+                stored_path = preindexed_docs[doc_key].get("file_path", "")
                 if stored_path == full_path:
-                    print(f"⏭️ Ya indexado: {relative_path}")
+                    print(f"⏭️ Ya pre-indexado: {relative_path}")
                     skipped_count += 1
                     continue
             
-            print(f"📄 Indexando: {relative_path}")
+            print(f"📄 Pre-indexando: {relative_path}")
             
             try:
-                # Extraer contenido del documento
                 if ext == ".pdf":
                     raw_docs = extract_pdf_parallel(full_path)
                 elif ext == ".txt":
@@ -159,48 +161,45 @@ def preindex_xampp_documents():
                     print(f"   ⚠️ Sin contenido extraíble")
                     continue
                 
-                # Dividir en chunks
                 splitter = RecursiveCharacterTextSplitter(
                     chunk_size=1500,
                     chunk_overlap=200
                 )
                 docs = splitter.split_documents(raw_docs)
                 
-                # Crear vectorstore
-                conv_dir = os.path.join(INDICES_BASE_DIR, doc_id)
+                # Guardar en carpeta de índices
+                index_dir = os.path.join(INDICES_BASE_DIR, "xampp_indices", doc_key)
                 vectorstore = FAISS.from_documents(docs, embeddings)
-                vectorstore.save_local(conv_dir)
+                vectorstore.save_local(index_dir)
                 
-                # Guardar metadatos
-                meta[doc_id] = {
-                    "id": doc_id,
+                # Guardar metadata del índice (NO conversación)
+                preindexed_docs[doc_key] = {
+                    "doc_key": doc_key,
                     "title": file,
-                    "type": "xampp",
-                    "target_name": file,
                     "relative_path": relative_path,
                     "file_path": full_path,
-                    "history": [],
-                    "created_at": datetime.now().isoformat(),
-                    "preindexed": True,
                     "file_size": os.path.getsize(full_path),
                     "pages": len(raw_docs),
-                    "chunks": len(docs)
+                    "chunks": len(docs),
+                    "created_at": datetime.now().isoformat()
                 }
                 
                 indexed_count += 1
-                print(f"   ✅ Indexado: {len(docs)} chunks, {len(raw_docs)} páginas")
+                print(f"   ✅ Pre-indexado: {len(docs)} chunks, {len(raw_docs)} páginas")
                 
             except Exception as e:
-                print(f"   ❌ Error indexando {file}: {e}")
+                print(f"   ❌ Error pre-indexando {file}: {e}")
     
-    # Guardar metadata actualizada
+    # Guardar solo los índices precalculados
     if indexed_count > 0:
-        save_metadata(meta)
+        os.makedirs(os.path.dirname(indices_path), exist_ok=True)
+        with open(indices_path, "w", encoding="utf-8") as f:
+            json.dump(preindexed_docs, f, ensure_ascii=False, indent=4)
     
     print(f"\n📊 RESUMEN PRE-INDEXADO:")
     print(f"   ✅ Nuevos índices: {indexed_count}")
     print(f"   ⏭️ Ya existentes: {skipped_count}")
-    print(f"   📁 Total en XAMPP: {indexed_count + skipped_count}")
+    print(f"   📁 Total documentos disponibles: {len(preindexed_docs)}")
     print("="*60 + "\n")
     
     return indexed_count
@@ -505,6 +504,78 @@ def scan_xampp_documents():
 
     return documents
 
+@app.post("/get_or_create_conversation/")
+async def get_or_create_conversation(doc_key: str = Form(...)):
+    """
+    Crea una conversación SOLO cuando se hace la primera pregunta.
+    Si ya existe, la devuelve.
+    """
+    meta = load_metadata()
+    
+    # Buscar si ya existe una conversación para este doc_key
+    existing_conv = None
+    for conv_id, conv_data in meta.items():
+        if conv_data.get("doc_key") == doc_key:
+            existing_conv = conv_id
+            break
+    
+    if existing_conv:
+        # Ya existe, devolverla
+        register_temp_session(existing_conv)
+        return {
+            "conversation_id": existing_conv,
+            "is_new": False,
+            "message": "Conversación existente cargada"
+        }
+    
+    # Crear nueva conversación
+    # Cargar índices precalculados
+    indices_path = os.path.join(INDICES_BASE_DIR, "xampp_indices.json")
+    with open(indices_path, "r", encoding="utf-8") as f:
+        preindexed_docs = json.load(f)
+    
+    if doc_key not in preindexed_docs:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Documento no encontrado en índices"}
+        )
+    
+    doc_info = preindexed_docs[doc_key]
+    
+    # Crear nueva conversación
+    conv_idx = len(meta) + 1
+    conversation_id = f"conv_{conv_idx}_{int(time.time())}"
+    
+    # Copiar el índice a la carpeta de la conversación (o crear enlace simbólico)
+    src_index_dir = os.path.join(INDICES_BASE_DIR, "xampp_indices", doc_key)
+    dst_index_dir = os.path.join(INDICES_BASE_DIR, conversation_id)
+    
+    # Copiar el índice precalculado
+    import shutil
+    shutil.copytree(src_index_dir, dst_index_dir)
+    
+    # Guardar metadata de la conversación
+    meta[conversation_id] = {
+        "id": conversation_id,
+        "title": doc_info["title"],
+        "type": "xampp",
+        "target_name": doc_info["title"],
+        "file_path": doc_info["file_path"],
+        "doc_key": doc_key,
+        "history": [],
+        "created_at": datetime.now().isoformat(),
+        "last_accessed": datetime.now().isoformat()
+    }
+    
+    save_metadata(meta)
+    register_temp_session(conversation_id)
+    
+    return {
+        "conversation_id": conversation_id,
+        "is_new": True,
+        "message": "✅ Nueva conversación creada"
+    }
+
 @app.get("/xampp_documents/")
 async def xampp_documents():
     docs = scan_xampp_documents()
@@ -521,8 +592,9 @@ async def xampp_documents():
 @app.post("/index_xampp_document/")
 async def index_xampp_document(path: str = Form(...)):
     """
-    Ahora este endpoint SOLO carga el índice pre-existente,
-    sin procesar el documento nuevamente.
+    Este endpoint NO crea conversación automáticamente.
+    Solo devuelve la referencia al índice pre-calculado.
+    La conversación se creará cuando se haga la primera pregunta.
     """
     full_path = os.path.join(XAMPP_DOCS_PATH, path)
     
@@ -532,84 +604,33 @@ async def index_xampp_document(path: str = Form(...)):
             content={"error": "Documento no encontrado"}
         )
     
-    # Generar el mismo ID que se usó en el pre-indexado
-    doc_id = f"xampp_{path.replace('/', '_').replace('\\', '_').replace('.', '_')}"
+    # Generar key del índice
+    doc_key = f"xampp_{path.replace('/', '_').replace('\\', '_').replace('.', '_')}"
     
-    meta = load_metadata()
-    
-    # Verificar si ya está pre-indexado
-    if doc_id in meta:
-        conv_dir = os.path.join(INDICES_BASE_DIR, doc_id)
-        if os.path.exists(conv_dir):
-            # Ya está indexado, solo devolver el ID
-            register_temp_session(doc_id)
-            return {
-                "conversation_id": doc_id,
-                "message": "✅ Documento XAMPP cargado instantáneamente (pre-indexado)",
-                "preindexed": True,
-                "pages": meta[doc_id].get("pages", 0),
-                "chunks": meta[doc_id].get("chunks", 0)
-            }
-    
-    # Si no está pre-indexado (por alguna razón), procesarlo ahora
-    try:
-        ext = os.path.splitext(full_path)[1].lower()
-        
-        if ext == ".pdf":
-            raw_docs = extract_pdf_parallel(full_path)
-        elif ext == ".txt":
-            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            raw_docs = [Document(
-                page_content=content,
-                metadata={"source": full_path, "page": 1}
-            )]
-        else:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Formato no soportado"}
-            )
-        
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1500,
-            chunk_overlap=200
-        )
-        docs = splitter.split_documents(raw_docs)
-        
-        conv_dir = os.path.join(INDICES_BASE_DIR, doc_id)
-        vectorstore = FAISS.from_documents(docs, embeddings)
-        vectorstore.save_local(conv_dir)
-        
-        meta[doc_id] = {
-            "id": doc_id,
-            "title": os.path.basename(full_path),
-            "type": "xampp",
-            "target_name": os.path.basename(full_path),
-            "relative_path": path,
-            "file_path": full_path,
-            "history": [],
-            "created_at": datetime.now().isoformat(),
-            "preindexed": False,
-            "pages": len(raw_docs),
-            "chunks": len(docs)
-        }
-        
-        save_metadata(meta)
-        register_temp_session(doc_id)
-        
-        return {
-            "conversation_id": doc_id,
-            "message": "✅ Documento XAMPP indexado correctamente",
-            "preindexed": False,
-            "pages": len(raw_docs),
-            "chunks": len(docs)
-        }
-        
-    except Exception as e:
+    # Cargar índices precalculados
+    indices_path = os.path.join(INDICES_BASE_DIR, "xampp_indices.json")
+    if not os.path.exists(indices_path):
         return JSONResponse(
             status_code=500,
-            content={"error": str(e)}
+            content={"error": "Sistema no inicializado. Reinicie el servidor."}
         )
+    
+    with open(indices_path, "r", encoding="utf-8") as f:
+        preindexed_docs = json.load(f)
+    
+    if doc_key not in preindexed_docs:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Documento no pre-indexado. Contacte al administrador."}
+        )
+    
+    # Devolver solo la referencia, SIN crear conversación aún
+    return {
+        "doc_key": doc_key,
+        "title": preindexed_docs[doc_key]["title"],
+        "message": "✅ Documento listo para consultar. Haz tu primera pregunta para iniciar la conversación.",
+        "ready": True
+    }
 
 @app.get("/preindex_status/")
 async def preindex_status():
@@ -866,24 +887,45 @@ async def upload_folder_remote(files: List[UploadFile] = File(...), cancel_token
 # ENDPOINTS: CONSULTAS RAG
 # =======================================
 @app.post("/ask_pdf/")
-async def ask_pdf(question: str = Form(...), style: str = Form("normal"), conversation_id: str = Form(...)):
+async def ask_pdf(question: str = Form(...), style: str = Form("normal"), conversation_id: str = Form(None), doc_key: str = Form(None)):
+    """
+    Si se envía doc_key, primero crea/obtiene la conversación.
+    Si se envía conversation_id, usa la existente.
+    """
+    
+    # Caso 1: Se proporcionó doc_key (primera pregunta de un documento XAMPP)
+    if doc_key and not conversation_id:
+        # Crear o obtener conversación
+        conv_result = await get_or_create_conversation(doc_key=doc_key)
+        if isinstance(conv_result, dict) and "conversation_id" in conv_result:
+            conversation_id = conv_result["conversation_id"]
+        else:
+            return conv_result  # Error response
+    
+    if not conversation_id:
+        return JSONResponse(status_code=400, content={"error": "Se requiere conversation_id o doc_key"})
+    
     meta = load_metadata()
     if conversation_id not in meta:
         return JSONResponse(status_code=404, content={"error": "ID de conversación no válido."})
-
+    
+    # Actualizar último acceso
+    meta[conversation_id]["last_accessed"] = datetime.now().isoformat()
+    save_metadata(meta)
+    
     conv_dir = os.path.join(INDICES_BASE_DIR, conversation_id)
     try:
         local_store = FAISS.load_local(conv_dir, embeddings, allow_dangerous_deserialization=True)
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": f"Error al cargar el índice: {e}"})
-
+    
     style_map = {
         "normal": "Eres un analista documental experto de CFE. Responde de forma profesional basándote en el texto y planos analizados.",
         "amable": "Eres un analista documental experto de CFE. Responde de manera amable, cordial y altamente detallada.",
         "agresivo": "Eres un analista documental experto de CFE. Responde de forma directa, técnica, concisa y sin rodeos.",
     }
     persona = style_map.get(style, style_map["normal"])
-
+    
     template = f"""{persona}
 Responde ÚNICAMENTE usando el contexto proporcionado.
 Si no encuentras información suficiente, indica claramente que no existe en el documento.
@@ -895,7 +937,7 @@ Pregunta:
 {{question}}
 
 Respuesta:"""
-
+    
     prompt = PromptTemplate(template=template, input_variables=["context", "question"])
     chain = RetrievalQA.from_chain_type(
         llm=ChatGroq(model=TEXT_MODEL, api_key=GROQ_API_KEY, temperature=0.2),
@@ -903,11 +945,12 @@ Respuesta:"""
         return_source_documents=True,
         chain_type_kwargs={"prompt": prompt},
     )
-
+    
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(_executor, partial(chain.invoke, {"query": question}))
     sources = sorted(set(d.metadata["source"] for d in result["source_documents"]))
-
+    
+    # Guardar historial
     meta[conversation_id]["history"].append({"role": "user", "content": question})
     meta[conversation_id]["history"].append({"role": "assistant", "content": result["result"], "sources": sources})
     save_metadata(meta)
@@ -916,8 +959,13 @@ Respuesta:"""
     if conversation_id in sessions:
         sessions[conversation_id]["last_accessed"] = datetime.now().isoformat()
         save_temp_sessions(sessions)
-
-    return {"answer": result["result"], "sources": sources}
+    
+    return {
+        "answer": result["result"],
+        "sources": sources,
+        "conversation_id": conversation_id,  # Enviar para que el frontend lo use
+        "is_new_conversation": True  # Indicar que es nueva
+    }
 
 @app.post("/ask_folder/")
 async def ask_folder(question: str = Form(...), conversation_id: str = Form(...)):

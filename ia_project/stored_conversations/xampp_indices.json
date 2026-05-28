@@ -1,0 +1,22 @@
+{
+    "xampp_Folleto CJN_pdf": {
+        "doc_key": "xampp_Folleto CJN_pdf",
+        "title": "Folleto CJN.pdf",
+        "relative_path": "Folleto CJN.pdf",
+        "file_path": "C:\\xampp\\htdocs\\ia_docs\\Folleto CJN.pdf",
+        "file_size": 1408877,
+        "pages": 2,
+        "chunks": 7,
+        "created_at": "2026-05-28T10:11:08.806122"
+    },
+    "xampp_Indice LFD_pdf": {
+        "doc_key": "xampp_Indice LFD_pdf",
+        "title": "Indice LFD.pdf",
+        "relative_path": "Indice LFD.pdf",
+        "file_path": "C:\\xampp\\htdocs\\ia_docs\\Indice LFD.pdf",
+        "file_size": 568654,
+        "pages": 3,
+        "chunks": 4,
+        "created_at": "2026-05-28T10:11:10.103807"
+    }
+}
