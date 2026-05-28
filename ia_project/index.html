@@ -1047,7 +1047,7 @@
 </div>
 
 <script>
-const API = "https://ind-annual-really-covering.trycloudflare.com";
+const API = "https://casio-investigations-rebel-division.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1296,12 +1296,17 @@ async function deleteConversation(id) {
 }
 
 async function loadConversation(id) {
+  console.log(`🔄 Cargando conversación: ${id}`);
+  
   activeConversationId = id;
   const conv = conversationsCache[id];
+  
   if (!conv) {
     console.error("Conversación no encontrada:", id);
     return;
   }
+  
+  console.log("Datos de conversación:", conv);
   
   // Determinar el tipo correcto
   if (conv.type === "pdf" || conv.type === "xampp") {
@@ -1315,35 +1320,49 @@ async function loadConversation(id) {
     pdfReady = false;
   }
   
-  // Inicializar chatMessages si no existe
+  // IMPORTANTE: Limpiar y recargar el chatMessages para este tab
   if (!chatMessages[currentTab]) {
     chatMessages[currentTab] = [];
   }
-  chatMessages[currentTab] = conv.history || [];
   
-  // Actualizar UI de tabs
-  const isResultsView = document.getElementById("results-view").style.display !== "none";
-  const activeTabClass = isResultsView ? "results-tab" : "mode-tab";
-  
-  document.querySelectorAll(`.${activeTabClass}`).forEach(el => el.classList.remove("active"));
-  
-  if (currentTab === "pdf") {
-    const tab1 = document.getElementById("tabPdf");
-    const tab2 = document.getElementById("rtabPdf");
-    if (tab1) tab1.classList.add("active");
-    if (tab2) tab2.classList.add("active");
-  } else {
-    const tab1 = document.getElementById("tabFolder");
-    const tab2 = document.getElementById("rtabFolder");
-    if (tab1) tab1.classList.add("active");
-    if (tab2) tab2.classList.add("active");
-  }
+  // Cargar el historial de la conversación
+  chatMessages[currentTab] = (conv.history || []).slice(); // Crear copia
+  console.log(`📝 ${chatMessages[currentTab].length} mensajes cargados`);
   
   // Mostrar la vista correcta
   showResultsView();
+  
+  // Actualizar UI de tabs
+  document.querySelectorAll(".mode-tab, .results-tab").forEach(el => {
+    el.classList.remove("active");
+  });
+  
+  if (currentTab === "pdf") {
+    const tabPdf = document.getElementById("tabPdf");
+    const rtabPdf = document.getElementById("rtabPdf");
+    if (tabPdf) tabPdf.classList.add("active");
+    if (rtabPdf) rtabPdf.classList.add("active");
+  } else {
+    const tabFolder = document.getElementById("tabFolder");
+    const rtabFolder = document.getElementById("rtabFolder");
+    if (tabFolder) tabFolder.classList.add("active");
+    if (rtabFolder) rtabFolder.classList.add("active");
+  }
+  
+  // Ocultar aiOverview
+  const aiOverview = document.getElementById("aiOverview");
+  if (aiOverview) aiOverview.style.display = "none";
+  
+  // Forzar renderizado
   renderHistory();
+  
+  // Actualizar badge
   refreshPdfBadge();
-  scrollToBottom();
+  
+  // Scroll al fondo
+  setTimeout(() => scrollToBottom(), 100);
+  
+  // Actualizar sidebar
   renderSidebar();
 }
 
@@ -1353,17 +1372,33 @@ async function loadConversation(id) {
 
 async function selectXamppDocument(doc) {
   try {
-    // Mostrar loading state
-    showResultsView();
+    console.log(`📄 Seleccionando documento XAMPP: ${doc.name}`);
     
-    // Limpiar chat anterior
+    // Resetear estados
+    activeConversationId = null;
+    pdfReady = false;
+    
+    // LIMPIAR COMPLETAMENTE EL CHAT
+    chatMessages.pdf = [];
+    chatMessages.folder = [];
+    
+    // Limpiar el DOM del chat
     const chatHistory = document.getElementById("chatHistory");
     if (chatHistory) chatHistory.innerHTML = "";
     
-    // Mostrar área de IA con typing
+    // Ocultar aiOverview
     const aiOverview = document.getElementById("aiOverview");
-    if (aiOverview) aiOverview.style.display = "block";
-    showTyping(true);
+    if (aiOverview) aiOverview.style.display = "none";
+    
+    // Mostrar vista de resultados
+    showResultsView();
+    
+    // Mostrar typing
+    const aiTyping = document.getElementById("aiTyping");
+    if (aiTyping) {
+      aiTyping.style.display = "flex";
+      aiTyping.innerHTML = '<span></span><span></span><span></span>';
+    }
     
     const fd = new FormData();
     fd.append("path", doc.relative_path);
@@ -1375,70 +1410,46 @@ async function selectXamppDocument(doc) {
     
     const data = await res.json();
     
-    showTyping(false);
+    // Ocultar typing
+    if (aiTyping) aiTyping.style.display = "none";
     
     if (!res.ok) {
-      console.error("Error response:", data);
-      let errorMsg = data.error || "Error desconocido al indexar documento";
-      
-      // Mostrar mensaje más amigable
-      addMessage("assistant", `❌ **Error al cargar documento**\n\nNo se pudo procesar "${doc.name}".\n\n**Motivo:** ${errorMsg}\n\n**Posibles soluciones:**\n- Verifica que el archivo no esté corrupto\n- Asegúrate de que el formato sea PDF válido\n- Intenta con otro documento`);
-      
-      // Mantener en la vista de resultados pero sin conversación activa
-      activeConversationId = null;
-      pdfReady = false;
+      console.error("Error:", data);
+      addMessage("assistant", `❌ **Error al cargar documento**\n\nNo se pudo procesar "${doc.name}".\n\n**Motivo:** ${data.error || "Error desconocido"}`);
       return;
     }
     
-    // ÉXITO - Configurar la conversación
+    console.log("✅ Documento indexado:", data);
+    
+    // Configurar nueva conversación
     activeConversationId = data.conversation_id;
     pdfReady = true;
-    folderReady = false;
     pdfLoadedName = doc.name;
-    
-    // CRÍTICO: Forzar el tab a PDF para documentos XAMPP
     currentTab = "pdf";
     
-    // Actualizar UI de tabs
-    document.querySelectorAll(".mode-tab, .results-tab").forEach(el => el.classList.remove("active"));
-    const tabPdf = document.getElementById("tabPdf");
-    const rtabPdf = document.getElementById("rtabPdf");
-    if (tabPdf) tabPdf.classList.add("active");
-    if (rtabPdf) rtabPdf.classList.add("active");
+    // Limpiar y preparar chatMessages para PDF
+    chatMessages.pdf = [];
     
-    // Mostrar el panel correcto en la UI de resultados
-    const panelContainer = document.getElementById("panelContainerResults");
-    const panelPdf = document.getElementById("panelPdf");
-    const panelFolder = document.getElementById("panelFolder");
-    
-    if (panelContainer && panelPdf && panelFolder) {
-      if (panelPdf.parentNode !== panelContainer) panelContainer.appendChild(panelPdf);
-      if (panelFolder.parentNode !== panelContainer) panelContainer.appendChild(panelFolder);
-      panelPdf.style.display = "block";
-      panelFolder.style.display = "none";
-    }
-    
-    // Recargar conversaciones y cargar la nueva
+    // Actualizar cache de conversaciones
     await fetchConversations();
+    
+    // Cargar la conversación (que está vacía)
     await loadConversation(activeConversationId);
     
-    // Mensaje de bienvenida
+    // Agregar mensaje de bienvenida
     addMessage("assistant", `✅ **Documento cargado correctamente**\n\nAhora puedes preguntarme sobre:\n📄 **${doc.name}**\n\n🔍 *Escribe tu pregunta técnica sobre el contenido del documento.*`);
     
-    // Actualizar badge PDF
+    // Actualizar badge
     refreshPdfBadge();
     
-    // Scroll al fondo
+    // Forzar scroll
     scrollToBottom();
     
   } catch(err) {
-    showTyping(false);
     console.error("Error en selectXamppDocument:", err);
-    
-    addMessage("assistant", `❌ **Error de conexión**\n\nNo se pudo conectar con el servidor API.\n\n**Verifica que:**\n- El servidor esté corriendo\n- La URL de la API sea correcta: ${API}\n- Tu conexión a internet esté activa`);
-    
-    activeConversationId = null;
-    pdfReady = false;
+    const aiTyping = document.getElementById("aiTyping");
+    if (aiTyping) aiTyping.style.display = "none";
+    addMessage("assistant", `❌ **Error de conexión**\n\nNo se pudo conectar con el servidor API.`);
   }
 }
 
@@ -1595,55 +1606,145 @@ async function askQuestion(q) {
     alert("❌ Sube un documento o selecciona una conversación antes de preguntar.");
     return;
   }
-  chatMessages[currentTab].push({ role: "user", content: q });
+  
+  // Agregar mensaje del usuario al chat visualmente
+  const userMsg = { role: "user", content: q };
+  if (!chatMessages[currentTab]) {
+    chatMessages[currentTab] = [];
+  }
+  chatMessages[currentTab].push(userMsg);
+  
+  // Renderizar inmediatamente el mensaje del usuario
   renderHistory();
   scrollToBottom();
-  showTyping();
+  
+  // Mostrar typing indicator
+  const aiOverview = document.getElementById("aiOverview");
+  const aiTyping = document.getElementById("aiTyping");
+  if (aiOverview) aiOverview.style.display = "block";
+  if (aiTyping) {
+    aiTyping.style.display = "flex";
+    aiTyping.innerHTML = '<span></span><span></span><span></span>';
+  }
+  
   const fd = new FormData();
   fd.append("question", q);
   fd.append("conversation_id", activeConversationId);
+  
   let endpoint;
-  if (
-    currentTab === "pdf" ||
-    currentTab === "xampp"
-    ) {
+  if (currentTab === "pdf" || currentTab === "xampp") {
     const style = document.getElementById("styleSelect")?.value || "normal";
     fd.append("style", style);
     endpoint = `${API}/ask_pdf/`;
-  } else { endpoint = `${API}/ask_folder/`; }
+  } else {
+    endpoint = `${API}/ask_folder/`;
+  }
+  
   try {
     const res = await fetch(endpoint, { method: "POST", body: fd });
     const data = await res.json();
-    hideTyping();
-    await fetchConversations();
-    await loadConversation(activeConversationId);
-    scrollToBottom();
+    
+    // Ocultar typing
+    if (aiTyping) aiTyping.style.display = "none";
+    
+    if (res.ok && data.answer) {
+      // Agregar respuesta del asistente
+      const assistantMsg = {
+        role: "assistant",
+        content: data.answer,
+        sources: data.sources || []
+      };
+      chatMessages[currentTab].push(assistantMsg);
+      
+      // Forzar renderizado completo
+      renderHistory();
+      
+      // Actualizar metadata de la conversación en cache
+      if (conversationsCache[activeConversationId]) {
+        if (!conversationsCache[activeConversationId].history) {
+          conversationsCache[activeConversationId].history = [];
+        }
+        conversationsCache[activeConversationId].history.push(userMsg);
+        conversationsCache[activeConversationId].history.push(assistantMsg);
+      }
+      
+      scrollToBottom();
+    } else {
+      // Mostrar error
+      const errorMsg = { role: "assistant", content: `❌ Error: ${data.error || "No se pudo obtener respuesta"}` };
+      chatMessages[currentTab].push(errorMsg);
+      renderHistory();
+      scrollToBottom();
+    }
   } catch(e) {
-    hideTyping();
-    alert("❌ Error de conexión con la API.");
+    console.error("Error en askQuestion:", e);
+    if (aiTyping) aiTyping.style.display = "none";
+    const errorMsg = { role: "assistant", content: "❌ Error de conexión con el servidor." };
+    chatMessages[currentTab].push(errorMsg);
+    renderHistory();
+    scrollToBottom();
   }
 }
 
 function renderHistory() {
   const container = document.getElementById("chatHistory");
   if (!container) return;
+  
   const msgs = chatMessages[currentTab] || [];
-  container.innerHTML = msgs.map(m => `
-    <div class="chat-bubble ${m.role}">
-      <div class="bubble-icon ${m.role === 'user' ? 'user-icon' : 'bot-icon'}">
-        <i class="fas ${m.role === 'user' ? 'fa-user' : 'fa-robot'}"></i>
+  
+  console.log(`📝 Renderizando ${msgs.length} mensajes para ${currentTab}`);
+  
+  if (msgs.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px 20px; color: #5f6368;">
+        <i class="fas fa-comments" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
+        <p>No hay mensajes aún.</p>
+        <p style="font-size: 13px;">Escribe una pregunta sobre el documento técnico.</p>
       </div>
-      <div class="bubble-text">
-        <div>${(m.content || "").replace(/\n/g, "<br>")}</div>
-        ${m.sources && m.sources.length > 0 ? `
-          <div style="margin-top:12px;font-size:11px;color:#70757a;border-top:1px dashed #dfe1e5;padding-top:6px;">
-            <strong>Documentos Fuente:</strong><br>
-            ${m.sources.map(src => `<button class="source-btn" onclick="openPreview('${encodeURIComponent(src)}','${src.split(/[\\/]/).pop()}')"><i class="fas fa-file-pdf"></i> ${src.split(/[\\/]/).pop()}</button>`).join("")}
-          </div>
-        ` : ''}
-      </div>
-    </div>
-  `).join("");
+    `;
+    return;
+  }
+  
+  let html = '';
+  
+  for (let i = 0; i < msgs.length; i++) {
+    const m = msgs[i];
+    const isUser = m.role === "user";
+    
+    html += `
+      <div class="chat-bubble ${isUser ? 'user' : 'assistant'}">
+        <div class="bubble-icon ${isUser ? 'user-icon' : 'bot-icon'}">
+          <i class="fas ${isUser ? 'fa-user' : 'fa-robot'}"></i>
+        </div>
+        <div class="bubble-text">
+          <div>${(m.content || "").replace(/\n/g, "<br>")}</div>
+    `;
+    
+    // Agregar fuentes si existen
+    if (m.sources && m.sources.length > 0) {
+      html += `
+        <div style="margin-top:12px;font-size:11px;color:#70757a;border-top:1px dashed #dfe1e5;padding-top:6px;">
+          <strong><i class="fas fa-file-alt"></i> Fuentes:</strong><br>
+      `;
+      for (const src of m.sources) {
+        const fileName = src.split(/[\\/]/).pop();
+        html += `<button class="source-btn" onclick="openPreview('${encodeURIComponent(src)}','${fileName}')">
+          <i class="fas fa-file-pdf"></i> ${fileName}
+        </button>`;
+      }
+      html += `</div>`;
+    }
+    
+    html += `</div></div>`;
+  }
+  
+  container.innerHTML = html;
+  
+  // Ocultar el aiOverview si hay mensajes
+  const aiOverview = document.getElementById("aiOverview");
+  if (aiOverview && msgs.length > 0) {
+    aiOverview.style.display = "none";
+  }
 }
 
 function showTyping() {
@@ -1678,26 +1779,87 @@ function closePreview() {
 }
 
 function newConversation() {
+  // Resetear todos los estados globales
   activeConversationId = null;
   pdfReady = false;
   folderReady = false;
   pdfFile = null;
   pdfLoadedName = "";
+  
+  // Resetear arrays de mensajes
   chatMessages = { pdf: [], folder: [] };
-  document.getElementById("pdfFileInput").value = "";
+  
+  // Resetear inputs del DOM
+  const pdfInput = document.getElementById("pdfFileInput");
+  if (pdfInput) pdfInput.value = "";
   document.getElementById("pdfFileName").textContent = "Sin archivo";
-  document.getElementById("folderFileInput").value = "";
+  
+  const folderInput = document.getElementById("folderFileInput");
+  if (folderInput) folderInput.value = "";
   document.getElementById("folderNameHint").textContent = "Sin carpeta seleccionada";
   selectedFolderFiles = [];
-  document.getElementById("searchInput").value = "";
-  document.getElementById("searchInputResults").value = "";
-  document.getElementById("pdfStatus").style.display = "none";
-  document.getElementById("folderStatus").style.display = "none";
-  document.getElementById("pdfActiveBadge").style.display = "none";
-  document.getElementById("main-view").style.display = "flex";
-  document.getElementById("main-footer").style.display = "block";
-  document.getElementById("results-view").style.display = "none";
-  switchTab("pdf");
+  
+  // Limpiar campos de búsqueda
+  const searchInput = document.getElementById("searchInput");
+  if (searchInput) searchInput.value = "";
+  const searchInputResults = document.getElementById("searchInputResults");
+  if (searchInputResults) searchInputResults.value = "";
+  
+  // Ocultar status badges
+  const pdfStatus = document.getElementById("pdfStatus");
+  if (pdfStatus) pdfStatus.style.display = "none";
+  const folderStatus = document.getElementById("folderStatus");
+  if (folderStatus) folderStatus.style.display = "none";
+  const pdfActiveBadge = document.getElementById("pdfActiveBadge");
+  if (pdfActiveBadge) pdfActiveBadge.style.display = "none";
+  
+  // Limpiar el historial del chat visualmente
+  const chatHistory = document.getElementById("chatHistory");
+  if (chatHistory) chatHistory.innerHTML = "";
+  
+  // Ocultar el área de respuesta IA
+  const aiOverview = document.getElementById("aiOverview");
+  if (aiOverview) aiOverview.style.display = "none";
+  
+  // Resetear typing indicator
+  const aiTyping = document.getElementById("aiTyping");
+  if (aiTyping) aiTyping.style.display = "none";
+  
+  // Cambiar a la vista principal (home)
+  const mainView = document.getElementById("main-view");
+  const mainFooter = document.getElementById("main-footer");
+  const resultsView = document.getElementById("results-view");
+  
+  if (mainView) mainView.style.display = "flex";
+  if (mainFooter) mainFooter.style.display = "block";
+  if (resultsView) resultsView.style.display = "none";
+  
+  // Asegurar que el tab esté en PDF
+  currentTab = "pdf";
+  
+  // Forzar la sincronización de tabs visuales
+  document.querySelectorAll(".mode-tab, .results-tab").forEach(el => {
+    el.classList.remove("active");
+  });
+  
+  const tabPdf = document.getElementById("tabPdf");
+  const rtabPdf = document.getElementById("rtabPdf");
+  if (tabPdf) tabPdf.classList.add("active");
+  if (rtabPdf) rtabPdf.classList.add("active");
+  
+  // Asegurar que los paneles se muestren correctamente
+  const panelContainer = document.getElementById("panelContainerHome");
+  const panelPdf = document.getElementById("panelPdf");
+  const panelFolder = document.getElementById("panelFolder");
+  
+  if (panelContainer && panelPdf && panelFolder) {
+    if (panelPdf.parentNode !== panelContainer) panelContainer.appendChild(panelPdf);
+    if (panelFolder.parentNode !== panelContainer) panelContainer.appendChild(panelFolder);
+    panelPdf.style.display = "block";
+    panelFolder.style.display = "none";
+  }
+  
+  // Recargar la lista de conversaciones
   fetchConversations();
 }
 
