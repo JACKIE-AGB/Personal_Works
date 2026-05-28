@@ -1047,7 +1047,7 @@
 </div>
 
 <script>
-const API = "https://looking-determining-antiques-rick.trycloudflare.com";
+const API = "https://exp-skirt-dealt-gnu.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1250,20 +1250,31 @@ async function fetchConversations() {
 
 function renderSidebar() {
   const container = document.getElementById("sidebarHistoryList");
+  if (!container) return;
+  
   container.innerHTML = "";
+  
   Object.values(conversationsCache).reverse().forEach(conv => {
     const isSelected = conv.id === activeConversationId ? "active" : "";
-    const icon = conv.type === "folder" ? "fa-folder-open": "fa-file-pdf";
+    // XAMPP documents también usan ícono de PDF
+    const icon = (conv.type === "folder") ? "fa-folder-open" : "fa-file-pdf";
+    const displayType = (conv.type === "xampp") ? "📄 XAMPP" : (conv.type === "folder" ? "📁 Carpeta" : "📑 PDF");
+    
     const card = document.createElement("div");
     card.className = `history-card ${isSelected}`;
     card.onclick = () => loadConversation(conv.id);
     card.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div class="history-card-title"><i class="fas fa-comment-alt" style="color:#9aa0a6;"></i> ${conv.title}</div>
-        <button class="conv-actions-btn" onclick="event.stopPropagation(); deleteConversation('${conv.id}')"><i class="fas fa-trash-alt"></i></button>
+        <div class="history-card-title">
+          <i class="fas fa-comment-alt" style="color:#9aa0a6;"></i> 
+          ${conv.title || conv.target_name || conv.id}
+        </div>
+        <button class="conv-actions-btn" onclick="event.stopPropagation(); deleteConversation('${conv.id}')">
+          <i class="fas fa-trash-alt"></i>
+        </button>
       </div>
-      <div class="history-card-subtext" onclick="event.stopPropagation(); ${conv.type === 'pdf' ? `openPreview('${encodeURIComponent(conv.file_path)}','${conv.target_name}')` : `alert('Directorio: ${conv.file_path}')`}">
-        <i class="fas ${icon}"></i> ${conv.target_name}
+      <div class="history-card-subtext" onclick="event.stopPropagation(); openPreview('${encodeURIComponent(conv.file_path)}','${conv.target_name}')">
+        <i class="fas ${icon}"></i> ${displayType}: ${conv.target_name}
       </div>
     `;
     container.appendChild(card);
@@ -1287,11 +1298,48 @@ async function deleteConversation(id) {
 async function loadConversation(id) {
   activeConversationId = id;
   const conv = conversationsCache[id];
-  if (!conv) return;
-  currentTab = conv.type;
+  if (!conv) {
+    console.error("Conversación no encontrada:", id);
+    return;
+  }
+  
+  // Determinar el tipo correcto
+  if (conv.type === "pdf" || conv.type === "xampp") {
+    currentTab = "pdf";
+    pdfReady = true;
+    folderReady = false;
+    pdfLoadedName = conv.target_name;
+  } else if (conv.type === "folder") {
+    currentTab = "folder";
+    folderReady = true;
+    pdfReady = false;
+  }
+  
+  // Inicializar chatMessages si no existe
+  if (!chatMessages[currentTab]) {
+    chatMessages[currentTab] = [];
+  }
   chatMessages[currentTab] = conv.history || [];
-  if (conv.type === "pdf") { pdfReady = true; pdfLoadedName = conv.target_name; }
-  else { folderReady = true; }
+  
+  // Actualizar UI de tabs
+  const isResultsView = document.getElementById("results-view").style.display !== "none";
+  const activeTabClass = isResultsView ? "results-tab" : "mode-tab";
+  
+  document.querySelectorAll(`.${activeTabClass}`).forEach(el => el.classList.remove("active"));
+  
+  if (currentTab === "pdf") {
+    const tab1 = document.getElementById("tabPdf");
+    const tab2 = document.getElementById("rtabPdf");
+    if (tab1) tab1.classList.add("active");
+    if (tab2) tab2.classList.add("active");
+  } else {
+    const tab1 = document.getElementById("tabFolder");
+    const tab2 = document.getElementById("rtabFolder");
+    if (tab1) tab1.classList.add("active");
+    if (tab2) tab2.classList.add("active");
+  }
+  
+  // Mostrar la vista correcta
   showResultsView();
   renderHistory();
   refreshPdfBadge();
@@ -1304,62 +1352,94 @@ async function loadConversation(id) {
 // ======================================
 
 async function selectXamppDocument(doc) {
-
   try {
-
+    // Mostrar loading state
     showResultsView();
-
-    document.getElementById("chatHistory").innerHTML = "";
-
-    document.getElementById("aiOverview").style.display = "block";
-
+    
+    // Limpiar chat anterior
+    const chatHistory = document.getElementById("chatHistory");
+    if (chatHistory) chatHistory.innerHTML = "";
+    
+    // Mostrar área de IA con typing
+    const aiOverview = document.getElementById("aiOverview");
+    if (aiOverview) aiOverview.style.display = "block";
     showTyping(true);
-
+    
     const fd = new FormData();
-
     fd.append("path", doc.relative_path);
-
+    
     const res = await fetch(`${API}/index_xampp_document/`, {
       method: "POST",
       body: fd
     });
-
+    
     const data = await res.json();
-
+    
     showTyping(false);
-
+    
     if (!res.ok) {
-
-      alert(data.error || "Error indexando documento");
-
+      console.error("Error response:", data);
+      let errorMsg = data.error || "Error desconocido al indexar documento";
+      
+      // Mostrar mensaje más amigable
+      addMessage("assistant", `❌ **Error al cargar documento**\n\nNo se pudo procesar "${doc.name}".\n\n**Motivo:** ${errorMsg}\n\n**Posibles soluciones:**\n- Verifica que el archivo no esté corrupto\n- Asegúrate de que el formato sea PDF válido\n- Intenta con otro documento`);
+      
+      // Mantener en la vista de resultados pero sin conversación activa
+      activeConversationId = null;
+      pdfReady = false;
       return;
     }
-
+    
+    // ÉXITO - Configurar la conversación
     activeConversationId = data.conversation_id;
-
     pdfReady = true;
-
+    folderReady = false;
     pdfLoadedName = doc.name;
-
+    
+    // CRÍTICO: Forzar el tab a PDF para documentos XAMPP
+    currentTab = "pdf";
+    
+    // Actualizar UI de tabs
+    document.querySelectorAll(".mode-tab, .results-tab").forEach(el => el.classList.remove("active"));
+    const tabPdf = document.getElementById("tabPdf");
+    const rtabPdf = document.getElementById("rtabPdf");
+    if (tabPdf) tabPdf.classList.add("active");
+    if (rtabPdf) rtabPdf.classList.add("active");
+    
+    // Mostrar el panel correcto en la UI de resultados
+    const panelContainer = document.getElementById("panelContainerResults");
+    const panelPdf = document.getElementById("panelPdf");
+    const panelFolder = document.getElementById("panelFolder");
+    
+    if (panelContainer && panelPdf && panelFolder) {
+      if (panelPdf.parentNode !== panelContainer) panelContainer.appendChild(panelPdf);
+      if (panelFolder.parentNode !== panelContainer) panelContainer.appendChild(panelFolder);
+      panelPdf.style.display = "block";
+      panelFolder.style.display = "none";
+    }
+    
+    // Recargar conversaciones y cargar la nueva
     await fetchConversations();
-
     await loadConversation(activeConversationId);
-
-    addMessage(
-      "assistant",
-      `✅ Documento cargado correctamente.\n\nAhora puedes preguntarme sobre:\n${doc.name}`
-    );
-
+    
+    // Mensaje de bienvenida
+    addMessage("assistant", `✅ **Documento cargado correctamente**\n\nAhora puedes preguntarme sobre:\n📄 **${doc.name}**\n\n🔍 *Escribe tu pregunta técnica sobre el contenido del documento.*`);
+    
+    // Actualizar badge PDF
+    refreshPdfBadge();
+    
+    // Scroll al fondo
+    scrollToBottom();
+    
   } catch(err) {
-
     showTyping(false);
-
-    console.error(err);
-
-    alert("Error conectando con la API");
-
+    console.error("Error en selectXamppDocument:", err);
+    
+    addMessage("assistant", `❌ **Error de conexión**\n\nNo se pudo conectar con el servidor API.\n\n**Verifica que:**\n- El servidor esté corriendo\n- La URL de la API sea correcta: ${API}\n- Tu conexión a internet esté activa`);
+    
+    activeConversationId = null;
+    pdfReady = false;
   }
-
 }
 
 function switchTab(tab) {
