@@ -1047,7 +1047,7 @@
 </div>
 
 <script>
-const API = "https://knight-instructor-thereby-minimal.trycloudflare.com";
+const API = "https://ind-annual-really-covering.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1067,8 +1067,6 @@ let folderAbortController = null;
 let selectedFolderFiles = [];
 let xamppDocuments = [];
 let xamppExpanded = false;
-let currentDocKey = null;
-let currentXamppDoc = null;
 
 // Busca y reemplaza la función toggleXamppDocuments dentro del <script>
 async function toggleXamppDocuments() {
@@ -1355,12 +1353,14 @@ async function loadConversation(id) {
 
 async function selectXamppDocument(doc) {
   try {
-    // Mostrar loading
+    // Mostrar loading state
     showResultsView();
     
+    // Limpiar chat anterior
     const chatHistory = document.getElementById("chatHistory");
     if (chatHistory) chatHistory.innerHTML = "";
     
+    // Mostrar área de IA con typing
     const aiOverview = document.getElementById("aiOverview");
     if (aiOverview) aiOverview.style.display = "block";
     showTyping(true);
@@ -1374,41 +1374,43 @@ async function selectXamppDocument(doc) {
     });
     
     const data = await res.json();
+    
     showTyping(false);
     
     if (!res.ok) {
-      addMessage("assistant", `❌ Error: ${data.error || "No se pudo cargar el documento"}`);
+      console.error("Error response:", data);
+      let errorMsg = data.error || "Error desconocido al indexar documento";
+      
+      // Mostrar mensaje más amigable
+      addMessage("assistant", `❌ **Error al cargar documento**\n\nNo se pudo procesar "${doc.name}".\n\n**Motivo:** ${errorMsg}\n\n**Posibles soluciones:**\n- Verifica que el archivo no esté corrupto\n- Asegúrate de que el formato sea PDF válido\n- Intenta con otro documento`);
+      
+      // Mantener en la vista de resultados pero sin conversación activa
+      activeConversationId = null;
+      pdfReady = false;
       return;
     }
     
-    // Guardar el doc_key para futuras preguntas
-    currentDocKey = data.doc_key;
-    currentXamppDoc = {
-      doc_key: data.doc_key,
-      title: data.title,
-      relative_path: doc.relative_path
-    };
+    // ÉXITO - Configurar la conversación
+    activeConversationId = data.conversation_id;
+    pdfReady = true;
+    folderReady = false;
+    pdfLoadedName = doc.name;
     
-    // NO activar conversación aún - solo mostrar que está listo
-    activeConversationId = null;  // Importante: sin conversación activa aún
-    
-    // Mostrar mensaje de bienvenida
-    addMessage("assistant", `✅ **Documento listo: ${data.title}**\n\n📄 El documento ha sido pre-cargado y está listo para consultar.\n\n✍️ **Escribe tu primera pregunta para comenzar la conversación.**`);
-    
-    // Forzar tab PDF
+    // CRÍTICO: Forzar el tab a PDF para documentos XAMPP
     currentTab = "pdf";
     
-    // Actualizar UI
+    // Actualizar UI de tabs
     document.querySelectorAll(".mode-tab, .results-tab").forEach(el => el.classList.remove("active"));
     const tabPdf = document.getElementById("tabPdf");
     const rtabPdf = document.getElementById("rtabPdf");
     if (tabPdf) tabPdf.classList.add("active");
     if (rtabPdf) rtabPdf.classList.add("active");
     
-    // Asegurar panel PDF visible
+    // Mostrar el panel correcto en la UI de resultados
     const panelContainer = document.getElementById("panelContainerResults");
     const panelPdf = document.getElementById("panelPdf");
     const panelFolder = document.getElementById("panelFolder");
+    
     if (panelContainer && panelPdf && panelFolder) {
       if (panelPdf.parentNode !== panelContainer) panelContainer.appendChild(panelPdf);
       if (panelFolder.parentNode !== panelContainer) panelContainer.appendChild(panelFolder);
@@ -1416,19 +1418,27 @@ async function selectXamppDocument(doc) {
       panelFolder.style.display = "none";
     }
     
-    // Limpiar input y focus
-    const searchInput = document.getElementById("searchInputResults");
-    if (searchInput) {
-      searchInput.value = "";
-      searchInput.focus();
-    }
+    // Recargar conversaciones y cargar la nueva
+    await fetchConversations();
+    await loadConversation(activeConversationId);
     
+    // Mensaje de bienvenida
+    addMessage("assistant", `✅ **Documento cargado correctamente**\n\nAhora puedes preguntarme sobre:\n📄 **${doc.name}**\n\n🔍 *Escribe tu pregunta técnica sobre el contenido del documento.*`);
+    
+    // Actualizar badge PDF
+    refreshPdfBadge();
+    
+    // Scroll al fondo
     scrollToBottom();
     
   } catch(err) {
     showTyping(false);
-    console.error(err);
-    addMessage("assistant", `❌ Error de conexión: ${err.message}`);
+    console.error("Error en selectXamppDocument:", err);
+    
+    addMessage("assistant", `❌ **Error de conexión**\n\nNo se pudo conectar con el servidor API.\n\n**Verifica que:**\n- El servidor esté corriendo\n- La URL de la API sea correcta: ${API}\n- Tu conexión a internet esté activa`);
+    
+    activeConversationId = null;
+    pdfReady = false;
   }
 }
 
@@ -1581,93 +1591,36 @@ function doSearch() {
 }
 
 async function askQuestion(q) {
-  if (!q.trim()) return;
-  
-  // Caso: documento XAMPP seleccionado pero sin conversación activa
-  if (!activeConversationId && currentDocKey) {
-    showTyping(true);
-    
-    try {
-      const fd = new FormData();
-      fd.append("question", q);
-      fd.append("doc_key", currentDocKey);
-      fd.append("style", document.getElementById("styleSelect")?.value || "normal");
-      
-      const res = await fetch(`${API}/ask_pdf/`, { method: "POST", body: fd });
-      const data = await res.json();
-      
-      hideTyping();
-      
-      if (res.ok && data.conversation_id) {
-        // Nueva conversación creada automáticamente
-        activeConversationId = data.conversation_id;
-        
-        // Recargar conversaciones para que aparezca en la barra lateral
-        await fetchConversations();
-        
-        // Cargar la conversación recién creada
-        await loadConversation(activeConversationId);
-        
-        // Agregar la pregunta y respuesta al chat
-        if (!chatMessages[currentTab]) chatMessages[currentTab] = [];
-        chatMessages[currentTab].push({ role: "user", content: q });
-        chatMessages[currentTab].push({ 
-          role: "assistant", 
-          content: data.answer,
-          sources: data.sources || []
-        });
-        renderHistory();
-        scrollToBottom();
-      } else {
-        addMessage("assistant", `❌ Error: ${data.error || "No se pudo procesar la pregunta"}`);
-      }
-    } catch(err) {
-      hideTyping();
-      addMessage("assistant", `❌ Error: ${err.message}`);
-    }
-    return;
-  }
-  
-  // Caso normal: conversación ya activa
   if (!activeConversationId) {
-    addMessage("assistant", "⚠️ **Selecciona un documento primero**\n\nHaz clic en un documento XAMPP antes de hacer una pregunta.");
+    alert("❌ Sube un documento o selecciona una conversación antes de preguntar.");
     return;
   }
-  
-  // Resto del código normal para preguntar...
   chatMessages[currentTab].push({ role: "user", content: q });
   renderHistory();
   scrollToBottom();
   showTyping();
-  
   const fd = new FormData();
   fd.append("question", q);
   fd.append("conversation_id", activeConversationId);
-  
   let endpoint;
-  if (currentTab === "pdf" || currentTab === "xampp") {
+  if (
+    currentTab === "pdf" ||
+    currentTab === "xampp"
+    ) {
     const style = document.getElementById("styleSelect")?.value || "normal";
     fd.append("style", style);
     endpoint = `${API}/ask_pdf/`;
-  } else {
-    endpoint = `${API}/ask_folder/`;
-  }
-  
+  } else { endpoint = `${API}/ask_folder/`; }
   try {
     const res = await fetch(endpoint, { method: "POST", body: fd });
     const data = await res.json();
     hideTyping();
-    
-    if (res.ok) {
-      await fetchConversations();
-      await loadConversation(activeConversationId);
-      scrollToBottom();
-    } else {
-      addMessage("assistant", `❌ Error: ${data.error || "Error en la consulta"}`);
-    }
+    await fetchConversations();
+    await loadConversation(activeConversationId);
+    scrollToBottom();
   } catch(e) {
     hideTyping();
-    addMessage("assistant", `❌ Error de conexión: ${e.message}`);
+    alert("❌ Error de conexión con la API.");
   }
 }
 
@@ -1726,8 +1679,6 @@ function closePreview() {
 
 function newConversation() {
   activeConversationId = null;
-  currentDocKey = null;  // Limpiar documento XAMPP seleccionado
-  currentXamppDoc = null;
   pdfReady = false;
   folderReady = false;
   pdfFile = null;
