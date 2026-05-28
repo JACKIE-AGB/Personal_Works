@@ -894,13 +894,19 @@
     <button class="new-chat-btn" onclick="newConversation()">
       <i class="fas fa-plus"></i> Nueva conversación
     </button>
-    <div class="sidebar-menu-item" onclick="loadXamppDocuments()">
-      <i class="fas fa-search"></i> Documentos XAMPP
-    </div>
-    <div class="sidebar-menu-item"><i class="fas fa-book-bookmark"></i> Biblioteca</div>
-    <div class="sidebar-section-title">Documentos XAMPP</div>
+    <div class="sidebar-menu-item expandable-menu" onclick="toggleXamppDocuments()">
+  <div class="menu-left">
+    <i class="fas fa-search"></i>
+    <span>Documentos XAMPP</span>
+  </div>
 
-    <div class="history-list" id="xamppDocumentsList"></div>
+  <i class="fas fa-chevron-right dropdown-arrow" id="xamppArrow"></i>
+</div>
+
+<div class="xampp-dropdown collapsed" id="xamppDropdown">
+  <div class="history-list" id="xamppDocumentsList"></div>
+</div>
+    <div class="sidebar-menu-item"><i class="fas fa-book-bookmark"></i> Biblioteca</div>
 
     <div class="sidebar-section-title">Conversaciones</div>
 
@@ -1039,6 +1045,33 @@ let pdfAbortController = null;
 let folderAbortController = null;
 let selectedFolderFiles = [];
 let xamppDocuments = [];
+let xamppExpanded = false;
+
+async function toggleXamppDocuments() {
+
+  const dropdown = document.getElementById("xamppDropdown");
+  const arrow = document.getElementById("xamppArrow");
+
+  xamppExpanded = !xamppExpanded;
+
+  if (xamppExpanded) {
+
+    dropdown.classList.remove("collapsed");
+    arrow.classList.add("rotated");
+
+    // Cargar documentos solo al abrir
+    if (xamppDocuments.length === 0) {
+      await loadXamppDocuments();
+    }
+
+  } else {
+
+    dropdown.classList.add("collapsed");
+    arrow.classList.remove("rotated");
+
+  }
+
+}
 
 function getDeletedConversations() {
   const stored = localStorage.getItem(STORAGE_KEY);

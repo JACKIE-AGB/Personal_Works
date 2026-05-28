@@ -926,3 +926,39 @@ footer {
         top: 68px;
     }
 }
+
+/* ======================================
+   XAMPP DROPDOWN
+====================================== */
+
+.expandable-menu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.menu-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dropdown-arrow {
+  font-size: 12px;
+  color: #9aa0a6;
+  transition: transform 0.25s ease;
+}
+
+.dropdown-arrow.rotated {
+  transform: rotate(90deg);
+}
+
+.xampp-dropdown {
+  overflow: hidden;
+  max-height: 500px;
+  transition: max-height 0.3s ease;
+}
+
+.xampp-dropdown.collapsed {
+  max-height: 0;
+}
