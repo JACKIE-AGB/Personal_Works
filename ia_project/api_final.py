@@ -37,6 +37,14 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     print("🚀 Servidor iniciado — limpiando datos de sesión anterior...")
     delete_all_conversations()
+    
+    # PRE-INDEXAR DOCUMENTOS XAMPP AL INICIO
+    print("\n🔧 Iniciando pre-indexado de documentos XAMPP...")
+    preindex_xampp_documents()
+    
+    # Verificar cambios periódicamente (opcional)
+    check_and_reindex_if_needed()
+    
     start_cleanup_scheduler()
     yield
     print("🛑 Servidor apagado — eliminando todos los datos de sesión...")
@@ -87,6 +95,169 @@ _executor   = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 GROQ_CONCURRENCY = 6
 
 CANCELLATION_TOKENS = {}
+
+# =======================================
+# FUNCIÓN PARA PRE-INDEXAR DOCUMENTOS XAMPP
+# =======================================
+
+def preindex_xampp_documents():
+    """
+    Escanea y pre-indexa TODOS los documentos XAMPP al iniciar el servidor.
+    Esto evita tener que procesarlos en tiempo real cuando el usuario los selecciona.
+    """
+    print("\n" + "="*60)
+    print("📚 PRE-INDEXADO DE DOCUMENTOS XAMPP")
+    print("="*60)
+    
+    if not os.path.exists(XAMPP_DOCS_PATH):
+        print(f"⚠️ Ruta XAMPP no encontrada: {XAMPP_DOCS_PATH}")
+        return 0
+    
+    meta = load_metadata()
+    indexed_count = 0
+    skipped_count = 0
+    
+    # Escanear todos los documentos
+    for root, dirs, files in os.walk(XAMPP_DOCS_PATH):
+        for file in files:
+            ext = os.path.splitext(file)[1].lower()
+            if ext not in SUPPORTED_EXTENSIONS:
+                continue
+            
+            full_path = os.path.join(root, file)
+            relative_path = os.path.relpath(full_path, XAMPP_DOCS_PATH)
+            
+            # Generar ID único basado en la ruta relativa
+            doc_id = f"xampp_{relative_path.replace('/', '_').replace('\\', '_').replace('.', '_')}"
+            
+            # Verificar si ya está indexado y si el archivo ha cambiado
+            if doc_id in meta:
+                # Check if file was modified since last index
+                stored_path = meta[doc_id].get("file_path", "")
+                if stored_path == full_path:
+                    print(f"⏭️ Ya indexado: {relative_path}")
+                    skipped_count += 1
+                    continue
+            
+            print(f"📄 Indexando: {relative_path}")
+            
+            try:
+                # Extraer contenido del documento
+                if ext == ".pdf":
+                    raw_docs = extract_pdf_parallel(full_path)
+                elif ext == ".txt":
+                    with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                    raw_docs = [Document(
+                        page_content=content,
+                        metadata={"source": full_path, "page": 1}
+                    )]
+                else:
+                    continue
+                
+                if not raw_docs:
+                    print(f"   ⚠️ Sin contenido extraíble")
+                    continue
+                
+                # Dividir en chunks
+                splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=1500,
+                    chunk_overlap=200
+                )
+                docs = splitter.split_documents(raw_docs)
+                
+                # Crear vectorstore
+                conv_dir = os.path.join(INDICES_BASE_DIR, doc_id)
+                vectorstore = FAISS.from_documents(docs, embeddings)
+                vectorstore.save_local(conv_dir)
+                
+                # Guardar metadatos
+                meta[doc_id] = {
+                    "id": doc_id,
+                    "title": file,
+                    "type": "xampp",
+                    "target_name": file,
+                    "relative_path": relative_path,
+                    "file_path": full_path,
+                    "history": [],
+                    "created_at": datetime.now().isoformat(),
+                    "preindexed": True,
+                    "file_size": os.path.getsize(full_path),
+                    "pages": len(raw_docs),
+                    "chunks": len(docs)
+                }
+                
+                indexed_count += 1
+                print(f"   ✅ Indexado: {len(docs)} chunks, {len(raw_docs)} páginas")
+                
+            except Exception as e:
+                print(f"   ❌ Error indexando {file}: {e}")
+    
+    # Guardar metadata actualizada
+    if indexed_count > 0:
+        save_metadata(meta)
+    
+    print(f"\n📊 RESUMEN PRE-INDEXADO:")
+    print(f"   ✅ Nuevos índices: {indexed_count}")
+    print(f"   ⏭️ Ya existentes: {skipped_count}")
+    print(f"   📁 Total en XAMPP: {indexed_count + skipped_count}")
+    print("="*60 + "\n")
+    
+    return indexed_count
+
+def check_and_reindex_if_needed():
+    """
+    Verifica si algún documento XAMPP ha cambiado y lo re-indexa
+    """
+    if not os.path.exists(XAMPP_DOCS_PATH):
+        return
+    
+    meta = load_metadata()
+    xampp_docs = {k: v for k, v in meta.items() if v.get("type") == "xampp"}
+    
+    for doc_id, doc_info in xampp_docs.items():
+        file_path = doc_info.get("file_path")
+        if file_path and os.path.exists(file_path):
+            # Verificar si el archivo ha cambiado (por tamaño o fecha)
+            stored_size = doc_info.get("file_size", 0)
+            current_size = os.path.getsize(file_path)
+            
+            if stored_size != current_size:
+                print(f"🔄 Documento cambiado, re-indexando: {doc_info['target_name']}")
+                # Eliminar índice viejo
+                conv_dir = os.path.join(INDICES_BASE_DIR, doc_id)
+                if os.path.exists(conv_dir):
+                    shutil.rmtree(conv_dir)
+                # Re-indexar
+                try:
+                    ext = os.path.splitext(file_path)[1].lower()
+                    if ext == ".pdf":
+                        raw_docs = extract_pdf_parallel(file_path)
+                    elif ext == ".txt":
+                        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                            content = f.read()
+                        raw_docs = [Document(
+                            page_content=content,
+                            metadata={"source": file_path, "page": 1}
+                        )]
+                    else:
+                        continue
+                    
+                    splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
+                    docs = splitter.split_documents(raw_docs)
+                    vectorstore = FAISS.from_documents(docs, embeddings)
+                    vectorstore.save_local(conv_dir)
+                    
+                    # Actualizar metadata
+                    doc_info["file_size"] = current_size
+                    doc_info["pages"] = len(raw_docs)
+                    doc_info["chunks"] = len(docs)
+                    doc_info["updated_at"] = datetime.now().isoformat()
+                    
+                except Exception as e:
+                    print(f"   ❌ Error re-indexando: {e}")
+        
+        save_metadata(meta)
 
 def load_metadata() -> dict:
     if os.path.exists(METADATA_FILE):
@@ -349,100 +520,124 @@ async def xampp_documents():
 
 @app.post("/index_xampp_document/")
 async def index_xampp_document(path: str = Form(...)):
-
+    """
+    Ahora este endpoint SOLO carga el índice pre-existente,
+    sin procesar el documento nuevamente.
+    """
     full_path = os.path.join(XAMPP_DOCS_PATH, path)
-
+    
     if not os.path.exists(full_path):
         return JSONResponse(
             status_code=404,
             content={"error": "Documento no encontrado"}
         )
-
+    
+    # Generar el mismo ID que se usó en el pre-indexado
+    doc_id = f"xampp_{path.replace('/', '_').replace('\\', '_').replace('.', '_')}"
+    
+    meta = load_metadata()
+    
+    # Verificar si ya está pre-indexado
+    if doc_id in meta:
+        conv_dir = os.path.join(INDICES_BASE_DIR, doc_id)
+        if os.path.exists(conv_dir):
+            # Ya está indexado, solo devolver el ID
+            register_temp_session(doc_id)
+            return {
+                "conversation_id": doc_id,
+                "message": "✅ Documento XAMPP cargado instantáneamente (pre-indexado)",
+                "preindexed": True,
+                "pages": meta[doc_id].get("pages", 0),
+                "chunks": meta[doc_id].get("chunks", 0)
+            }
+    
+    # Si no está pre-indexado (por alguna razón), procesarlo ahora
     try:
-
         ext = os.path.splitext(full_path)[1].lower()
-
-        raw_docs = []
-
-        # ======================
-        # PDF
-        # ======================
-
+        
         if ext == ".pdf":
             raw_docs = extract_pdf_parallel(full_path)
-
-        # ======================
-        # TXT
-        # ======================
-
         elif ext == ".txt":
-
             with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-
-            raw_docs = [
-                Document(
-                    page_content=content,
-                    metadata={
-                        "source": full_path,
-                        "page": 1
-                    }
-                )
-            ]
-
+            raw_docs = [Document(
+                page_content=content,
+                metadata={"source": full_path, "page": 1}
+            )]
         else:
             return JSONResponse(
                 status_code=400,
                 content={"error": "Formato no soportado"}
             )
-
+        
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1500,
             chunk_overlap=200
         )
-
         docs = splitter.split_documents(raw_docs)
-
-        meta = load_metadata()
-
-        conv_idx = len(meta) + 1
-
-        conv_id = f"xampp_{conv_idx}"
-
-        conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
-
+        
+        conv_dir = os.path.join(INDICES_BASE_DIR, doc_id)
         vectorstore = FAISS.from_documents(docs, embeddings)
-
         vectorstore.save_local(conv_dir)
-
-        file_name = os.path.basename(full_path)
-
-        meta[conv_id] = {
-            "id": conv_id,
-            "title": file_name,
+        
+        meta[doc_id] = {
+            "id": doc_id,
+            "title": os.path.basename(full_path),
             "type": "xampp",
-            "target_name": file_name,
+            "target_name": os.path.basename(full_path),
+            "relative_path": path,
             "file_path": full_path,
             "history": [],
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
+            "preindexed": False,
+            "pages": len(raw_docs),
+            "chunks": len(docs)
         }
-
+        
         save_metadata(meta)
-
-        register_temp_session(conv_id)
-
+        register_temp_session(doc_id)
+        
         return {
-            "conversation_id": conv_id,
-            "message": "✅ Documento XAMPP indexado correctamente"
+            "conversation_id": doc_id,
+            "message": "✅ Documento XAMPP indexado correctamente",
+            "preindexed": False,
+            "pages": len(raw_docs),
+            "chunks": len(docs)
         }
-
+        
     except Exception as e:
-
         return JSONResponse(
             status_code=500,
             content={"error": str(e)}
         )
+
+@app.get("/preindex_status/")
+async def preindex_status():
+    """Ver el estado del pre-indexado de documentos XAMPP"""
+    meta = load_metadata()
+    xampp_docs = {k: v for k, v in meta.items() if v.get("type") == "xampp"}
     
+    total_size = sum(v.get("file_size", 0) for v in xampp_docs.values())
+    total_pages = sum(v.get("pages", 0) for v in xampp_docs.values())
+    total_chunks = sum(v.get("chunks", 0) for v in xampp_docs.values())
+    
+    return {
+        "total_documents": len(xampp_docs),
+        "total_size_mb": round(total_size / (1024 * 1024), 2),
+        "total_pages": total_pages,
+        "total_chunks": total_chunks,
+        "documents": [
+            {
+                "name": v["target_name"],
+                "pages": v.get("pages", 0),
+                "chunks": v.get("chunks", 0),
+                "preindexed": v.get("preindexed", False),
+                "size_kb": round(v.get("file_size", 0) / 1024, 2)
+            }
+            for v in xampp_docs.values()
+        ]
+    }
+
 # =======================================
 # ENDPOINTS DE CONVERSACIÓN
 # =======================================
