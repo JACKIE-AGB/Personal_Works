@@ -1047,7 +1047,7 @@
 </div>
 
 <script>
-const API = "https://casio-investigations-rebel-division.trycloudflare.com";
+const API = "https://canyon-penetration-telling-eventually.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1067,6 +1067,7 @@ let folderAbortController = null;
 let selectedFolderFiles = [];
 let xamppDocuments = [];
 let xamppExpanded = false;
+let tempXamppConversation = {};
 
 // Busca y reemplaza la función toggleXamppDocuments dentro del <script>
 async function toggleXamppDocuments() {
@@ -1254,11 +1255,30 @@ function renderSidebar() {
   
   container.innerHTML = "";
   
-  Object.values(conversationsCache).reverse().forEach(conv => {
+  // Filtrar solo conversaciones que tienen historial (al menos un mensaje)
+  const conversationsWithHistory = Object.values(conversationsCache).filter(conv => {
+    return conv.history && conv.history.length > 0;
+  });
+  
+  if (conversationsWithHistory.length === 0) {
+    container.innerHTML = `
+      <div style="padding: 16px; text-align: center; color: #7c7f82; font-size: 12px;">
+        <i class="fas fa-comment-slash" style="font-size: 24px; margin-bottom: 8px; opacity: 0.5;"></i>
+        <p>No hay conversaciones activas</p>
+        <p style="font-size: 11px;">Selecciona un documento y haz una pregunta</p>
+      </div>
+    `;
+    return;
+  }
+  
+  conversationsWithHistory.reverse().forEach(conv => {
     const isSelected = conv.id === activeConversationId ? "active" : "";
-    // XAMPP documents también usan ícono de PDF
     const icon = (conv.type === "folder") ? "fa-folder-open" : "fa-file-pdf";
     const displayType = (conv.type === "xampp") ? "📄 XAMPP" : (conv.type === "folder" ? "📁 Carpeta" : "📑 PDF");
+    const messageCount = conv.history ? conv.history.length : 0;
+    const lastMessage = conv.history && conv.history.length > 0 
+      ? conv.history[conv.history.length - 1].content.substring(0, 40) + (conv.history[conv.history.length - 1].content.length > 40 ? "..." : "")
+      : "";
     
     const card = document.createElement("div");
     card.className = `history-card ${isSelected}`;
@@ -1275,6 +1295,9 @@ function renderSidebar() {
       </div>
       <div class="history-card-subtext" onclick="event.stopPropagation(); openPreview('${encodeURIComponent(conv.file_path)}','${conv.target_name}')">
         <i class="fas ${icon}"></i> ${displayType}: ${conv.target_name}
+      </div>
+      <div class="history-card-subtext" style="font-size: 10px; color: #5f6368;">
+        <i class="fas fa-comment-dots"></i> ${messageCount} mensajes • Último: "${lastMessage}"
       </div>
     `;
     container.appendChild(card);
@@ -1374,19 +1397,20 @@ async function selectXamppDocument(doc) {
   try {
     console.log(`📄 Seleccionando documento XAMPP: ${doc.name}`);
     
+    // IMPORTANTE: NO crear conversación aún, solo cargar el documento en memoria
+    // pero sin guardarlo en la barra lateral
+    
     // Resetear estados
     activeConversationId = null;
     pdfReady = false;
     
-    // LIMPIAR COMPLETAMENTE EL CHAT
+    // Limpiar el chat completamente
     chatMessages.pdf = [];
     chatMessages.folder = [];
     
-    // Limpiar el DOM del chat
     const chatHistory = document.getElementById("chatHistory");
     if (chatHistory) chatHistory.innerHTML = "";
     
-    // Ocultar aiOverview
     const aiOverview = document.getElementById("aiOverview");
     if (aiOverview) aiOverview.style.display = "none";
     
@@ -1419,30 +1443,36 @@ async function selectXamppDocument(doc) {
       return;
     }
     
-    console.log("✅ Documento indexado:", data);
+    console.log("✅ Documento pre-cargado en memoria:", data);
     
-    // Configurar nueva conversación
+    // Guardar el ID de la conversación TEMPORAL (no se mostrará en sidebar aún)
     activeConversationId = data.conversation_id;
     pdfReady = true;
     pdfLoadedName = doc.name;
     currentTab = "pdf";
     
-    // Limpiar y preparar chatMessages para PDF
+    // NO agregar a conversationsCache todavía
+    // Solo almacenar temporalmente
+    if (!window.tempXamppConversation) {
+      window.tempXamppConversation = {};
+    }
+    window.tempXamppConversation[activeConversationId] = {
+      id: activeConversationId,
+      title: doc.name,
+      type: "xampp",
+      target_name: doc.name,
+      history: [],
+      created_at: new Date().toISOString(),
+      isTemp: true  // Marcar como temporal (no mostrar en sidebar aún)
+    };
+    
+    // Limpiar chatMessages y preparar para nueva conversación
     chatMessages.pdf = [];
     
-    // Actualizar cache de conversaciones
-    await fetchConversations();
+    // Mostrar mensaje de bienvenida
+    addMessage("assistant", `✅ **Documento listo para consultar**\n\n📄 **${doc.name}**\n\n🔍 *Escribe tu pregunta técnica para comenzar la conversación.*`);
     
-    // Cargar la conversación (que está vacía)
-    await loadConversation(activeConversationId);
-    
-    // Agregar mensaje de bienvenida
-    addMessage("assistant", `✅ **Documento cargado correctamente**\n\nAhora puedes preguntarme sobre:\n📄 **${doc.name}**\n\n🔍 *Escribe tu pregunta técnica sobre el contenido del documento.*`);
-    
-    // Actualizar badge
     refreshPdfBadge();
-    
-    // Forzar scroll
     scrollToBottom();
     
   } catch(err) {
@@ -1607,6 +1637,11 @@ async function askQuestion(q) {
     return;
   }
   
+  // Verificar si es una conversación temporal (XAMPP sin historial)
+  const isTempXampp = window.tempXamppConversation && 
+                      window.tempXamppConversation[activeConversationId] &&
+                      window.tempXamppConversation[activeConversationId].isTemp === true;
+  
   // Agregar mensaje del usuario al chat visualmente
   const userMsg = { role: "user", content: q };
   if (!chatMessages[currentTab]) {
@@ -1656,19 +1691,48 @@ async function askQuestion(q) {
       };
       chatMessages[currentTab].push(assistantMsg);
       
-      // Forzar renderizado completo
-      renderHistory();
-      
-      // Actualizar metadata de la conversación en cache
-      if (conversationsCache[activeConversationId]) {
-        if (!conversationsCache[activeConversationId].history) {
-          conversationsCache[activeConversationId].history = [];
+      // SI ES UNA CONVERSACIÓN TEMPORAL (primera pregunta), guardarla permanentemente
+      if (isTempXampp) {
+        console.log("🆕 Primera pregunta - Creando conversación permanente en sidebar");
+        
+        // Crear la conversación en el servidor (ya existe, solo actualizar)
+        // Obtener metadata actualizada del servidor
+        const convRes = await fetch(`${API}/conversations/`);
+        const allConvs = await convRes.json();
+        
+        // Buscar nuestra conversación
+        if (allConvs[activeConversationId]) {
+          // Actualizar cache con el historial
+          conversationsCache[activeConversationId] = allConvs[activeConversationId];
+          conversationsCache[activeConversationId].history = chatMessages[currentTab];
         }
-        conversationsCache[activeConversationId].history.push(userMsg);
-        conversationsCache[activeConversationId].history.push(assistantMsg);
+        
+        // Eliminar de temporales
+        delete window.tempXamppConversation[activeConversationId];
+        
+        // Recargar sidebar para mostrar la nueva conversación
+        await fetchConversations();
+        
+        // Asegurar que la conversación esté seleccionada
+        renderSidebar();
+        
+        // Mostrar notificación
+        addMessage("assistant", `💬 **Conversación guardada**\n\nEsta conversación ahora aparecerá en la barra lateral bajo "Conversaciones".`);
+      } else {
+        // Actualizar conversación existente en cache
+        if (conversationsCache[activeConversationId]) {
+          if (!conversationsCache[activeConversationId].history) {
+            conversationsCache[activeConversationId].history = [];
+          }
+          conversationsCache[activeConversationId].history.push(userMsg);
+          conversationsCache[activeConversationId].history.push(assistantMsg);
+        }
       }
       
+      // Forzar renderizado completo
+      renderHistory();
       scrollToBottom();
+      
     } else {
       // Mostrar error
       const errorMsg = { role: "assistant", content: `❌ Error: ${data.error || "No se pudo obtener respuesta"}` };
@@ -1786,6 +1850,9 @@ function newConversation() {
   pdfFile = null;
   pdfLoadedName = "";
   
+  // Limpiar conversaciones temporales XAMPP
+  window.tempXamppConversation = {};
+  
   // Resetear arrays de mensajes
   chatMessages = { pdf: [], folder: [] };
   
@@ -1859,7 +1926,7 @@ function newConversation() {
     panelFolder.style.display = "none";
   }
   
-  // Recargar la lista de conversaciones
+  // Recargar la lista de conversaciones (solo las permanentes)
   fetchConversations();
 }
 
