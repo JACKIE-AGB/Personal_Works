@@ -832,6 +832,27 @@
     #panels-repository {
       display: none;
     }
+    /* Añadir dentro de <style> */
+    .xampp-dropdown {
+      overflow: hidden;
+      transition: max-height 0.3s ease-out, opacity 0.3s ease;
+      max-height: 500px; /* Un valor lo suficientemente alto para el contenido */
+      opacity: 1;
+    }
+
+    .xampp-dropdown.collapsed {
+      max-height: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .dropdown-arrow {
+      transition: transform 0.3s ease;
+    }
+
+    .dropdown-arrow.rotated {
+      transform: rotate(90deg);
+    }
   </style>
 </head>
 <body>
@@ -1026,7 +1047,7 @@
 </div>
 
 <script>
-const API = "https://ethernet-optimization-takes-adipex.trycloudflare.com";
+const API = "https://looking-determining-antiques-rick.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1047,30 +1068,27 @@ let selectedFolderFiles = [];
 let xamppDocuments = [];
 let xamppExpanded = false;
 
+// Busca y reemplaza la función toggleXamppDocuments dentro del <script>
 async function toggleXamppDocuments() {
-
   const dropdown = document.getElementById("xamppDropdown");
   const arrow = document.getElementById("xamppArrow");
 
   xamppExpanded = !xamppExpanded;
 
   if (xamppExpanded) {
-
+    // Abrir pestaña
     dropdown.classList.remove("collapsed");
     arrow.classList.add("rotated");
 
-    // Cargar documentos solo al abrir
+    // Cargar documentos solo si la lista está vacía
     if (xamppDocuments.length === 0) {
       await loadXamppDocuments();
     }
-
   } else {
-
+    // Cerrar pestaña
     dropdown.classList.add("collapsed");
     arrow.classList.remove("rotated");
-
   }
-
 }
 
 function getDeletedConversations() {
