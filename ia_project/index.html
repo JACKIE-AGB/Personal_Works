@@ -167,6 +167,11 @@
       color: #1a73e8;
       text-decoration: underline;
     }
+    .history-card-subtext.no-preview:hover {
+      color: #80868b;
+      text-decoration: none;
+      cursor: default;
+    }
 
     .conv-actions-btn {
       background: none;
@@ -1047,7 +1052,7 @@
 </div>
 
 <script>
-const API = "https://luther-cookie-million-obj.trycloudflare.com";
+const API = "https://thu-serial-seafood-make.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1067,6 +1072,46 @@ let folderAbortController = null;
 let selectedFolderFiles = [];
 let xamppDocuments = [];
 let xamppExpanded = false;
+let preindexDone = false;
+let preindexPollTimer = null;
+
+async function pollPreindexStatus() {
+  try {
+    const res  = await fetch(`${API}/preindex_status/`);
+    const data = await res.json();
+
+    preindexDone = data.done;
+
+    // Actualizar texto del menú con el progreso
+    const menuSpan = document.querySelector(".expandable-menu span");
+    if (menuSpan) {
+      if (data.running) {
+        menuSpan.textContent = `BD (${data.indexed}/${data.total} indexando…)`;
+      } else if (data.done) {
+        menuSpan.textContent = `Documentos BD ✅`;
+        // Restaurar después de 4s
+        setTimeout(() => {
+          if (menuSpan) menuSpan.textContent = "Documentos BD";
+        }, 4000);
+      }
+    }
+
+    // Refrescar lista si está abierta
+    if (xamppExpanded) {
+      await loadXamppDocuments();
+    }
+
+    if (data.running) {
+      preindexPollTimer = setTimeout(pollPreindexStatus, 2500);
+    } else {
+      preindexPollTimer = null;
+      if (xamppExpanded) await loadXamppDocuments();
+      await fetchConversations();
+    }
+  } catch(e) {
+    preindexPollTimer = setTimeout(pollPreindexStatus, 5000);
+  }
+}
 
 // Busca y reemplaza la función toggleXamppDocuments dentro del <script>
 async function toggleXamppDocuments() {
@@ -1202,10 +1247,12 @@ function renderXamppDocuments() {
 
   xamppDocuments.forEach(doc => {
 
-    const icon =
-      doc.name.endsWith(".pdf")
-      ? "fa-file-pdf"
-      : "fa-file-lines";
+    const icon = doc.name.endsWith(".pdf") ? "fa-file-pdf" : "fa-file-lines";
+
+    // Badge de estado: ⚡ listo, ⏳ aún indexando
+    const readyBadge = doc.preindexed
+      ? `<span style="font-size:10px; color:#137333; background:#e6f4ea; border-radius:8px; padding:2px 6px; margin-left:4px;">⚡ Listo</span>`
+      : `<span style="font-size:10px; color:#b06000; background:#fef7e0; border-radius:8px; padding:2px 6px; margin-left:4px;">⏳ Cargando</span>`;
 
     const div = document.createElement("div");
 
@@ -1213,10 +1260,12 @@ function renderXamppDocuments() {
 
     div.innerHTML = `
       <div class="history-card-title">
-        <i class="fas ${icon}" style="color:#9aa0a6;"></i>
-        ${doc.name}
+        <span style="display:flex; align-items:center; gap:6px; overflow:hidden;">
+          <i class="fas ${icon}" style="color:#9aa0a6; flex-shrink:0;"></i>
+          <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${doc.name}</span>
+        </span>
+        ${readyBadge}
       </div>
-
       <div class="history-card-subtext">
         ${doc.relative_path}
       </div>
@@ -1242,7 +1291,10 @@ async function fetchConversations() {
     const deleted = getDeletedConversations();
     conversationsCache = {};
     Object.entries(all).forEach(([id, conv]) => {
-      if (!deleted.includes(id)) conversationsCache[id] = conv;
+      // Los documentos de la BD (xampp) nunca se filtran — siempre están disponibles
+      if (conv.type === "xampp" || !deleted.includes(id)) {
+        conversationsCache[id] = conv;
+      }
     });
     renderSidebar();
   } catch(e) { console.error(e); }
@@ -1253,7 +1305,23 @@ function renderSidebar() {
   container.innerHTML = "";
   Object.values(conversationsCache).reverse().forEach(conv => {
     const isSelected = conv.id === activeConversationId ? "active" : "";
-    const icon = conv.type === "folder" ? "fa-folder-open": "fa-file-pdf";
+    const icon = conv.type === "folder"
+      ? "fa-folder-open"
+      : conv.type === "xampp"
+        ? "fa-database"
+        : "fa-file-pdf";
+
+    // Solo los PDFs subidos manualmente pueden tener vista previa en el sidebar
+    const subtextClick = conv.type === "pdf"
+      ? `onclick="event.stopPropagation(); openPreview('${encodeURIComponent(conv.file_path)}','${conv.target_name}')"`
+      : "";
+    const subtextClass = conv.type === "pdf"
+      ? "history-card-subtext"
+      : "history-card-subtext no-preview";
+    const subtextStyle = conv.type === "pdf"
+      ? ""
+      : "pointer-events:none; cursor:default;";
+
     const card = document.createElement("div");
     card.className = `history-card ${isSelected}`;
     card.onclick = () => loadConversation(conv.id);
@@ -1262,7 +1330,7 @@ function renderSidebar() {
         <div class="history-card-title"><i class="fas fa-comment-alt" style="color:#9aa0a6;"></i> ${conv.title}</div>
         <button class="conv-actions-btn" onclick="event.stopPropagation(); deleteConversation('${conv.id}')"><i class="fas fa-trash-alt"></i></button>
       </div>
-      <div class="history-card-subtext" onclick="event.stopPropagation(); ${conv.type === 'pdf' ? `openPreview('${encodeURIComponent(conv.file_path)}','${conv.target_name}')` : `alert('Directorio: ${conv.file_path}')`}">
+      <div class="${subtextClass}" ${subtextClick} style="${subtextStyle}">
         <i class="fas ${icon}"></i> ${conv.target_name}
       </div>
     `;
@@ -1271,16 +1339,41 @@ function renderSidebar() {
 }
 
 async function deleteConversation(id) {
-  if (confirm("¿Seguro que deseas eliminar esta conversación?")) {
-    try {
-      const fd = new FormData();
-      fd.append("id", id);
-      await fetch(`${API}/delete_conversation/`, { method: "POST", body: fd });
-    } catch(e) { console.error("Error eliminando conversación:", e); }
-    addDeletedConversation(id);
-    delete conversationsCache[id];
-    if (activeConversationId === id) newConversation();
-    else renderSidebar();
+  const conv = conversationsCache[id];
+  const isXampp = conv && conv.type === "xampp";
+
+  const confirmMsg = isXampp
+    ? "¿Deseas limpiar el historial de esta conversación?\n\nEl documento seguirá pre-cargado en la BD."
+    : "¿Seguro que deseas eliminar esta conversación?";
+
+  if (confirm(confirmMsg)) {
+    if (isXampp) {
+      // Para documentos de la BD: solo limpiar historial en backend, NO borrar el índice
+      try {
+        const fd = new FormData();
+        fd.append("id", id);
+        await fetch(`${API}/clear_conversation_history/`, { method: "POST", body: fd });
+      } catch(e) { console.error("Error limpiando historial:", e); }
+
+      // Limpiar historial localmente pero mantener la conversación en caché
+      if (conversationsCache[id]) {
+        conversationsCache[id].history = [];
+      }
+      if (activeConversationId === id) newConversation();
+      else renderSidebar();
+
+    } else {
+      // Para PDFs/carpetas subidos por el usuario: borrar completamente
+      try {
+        const fd = new FormData();
+        fd.append("id", id);
+        await fetch(`${API}/delete_conversation/`, { method: "POST", body: fd });
+      } catch(e) { console.error("Error eliminando conversación:", e); }
+      addDeletedConversation(id);
+      delete conversationsCache[id];
+      if (activeConversationId === id) newConversation();
+      else renderSidebar();
+    }
   }
 }
 
@@ -1288,10 +1381,19 @@ async function loadConversation(id) {
   activeConversationId = id;
   const conv = conversationsCache[id];
   if (!conv) return;
-  currentTab = conv.type;
-  chatMessages[currentTab] = conv.history || [];
-  if (conv.type === "pdf") { pdfReady = true; pdfLoadedName = conv.target_name; }
-  else { folderReady = true; }
+
+  // xampp se maneja igual que pdf (usa /ask_pdf/ en el backend)
+  if (conv.type === "xampp" || conv.type === "pdf") {
+    currentTab = "pdf";
+    chatMessages["pdf"] = conv.history || [];
+    pdfReady = true;
+    pdfLoadedName = conv.target_name;
+  } else {
+    currentTab = "folder";
+    chatMessages["folder"] = conv.history || [];
+    folderReady = true;
+  }
+
   showResultsView();
   renderHistory();
   refreshPdfBadge();
@@ -1303,50 +1405,122 @@ async function loadConversation(id) {
 // SELECCIONAR DOCUMENTO XAMPP
 // ======================================
 
-// BUSCA ESTA FUNCIÓN EN TU <script> DE INDEX.HTML Y REEMPLÁZALA COMPLETA:
-
-function selectXamppDocument(filename) {
-  // 1. Limpiar cualquier badge o alerta de error previo para que se vea limpio
-  const statusEl = document.getElementById("folderStatus");
-  if (statusEl) {
-    statusEl.style.display = "none";
-    statusEl.textContent = "";
-  }
-  
-  // Ocultar también errores globales si existieran
+async function selectXamppDocument(doc) {
+  // Limpiar badges de error previos
   const pdfStatus = document.getElementById("pdfStatus");
   if (pdfStatus) pdfStatus.style.display = "none";
+  const folderStatus = document.getElementById("folderStatus");
+  if (folderStatus) folderStatus.style.display = "none";
 
-  // 2. Forzar el cambio de pestaña interna a "pdf" o "chat" para evitar que use la lógica de Carpeta
-  switchTab("pdf"); 
+  // ── Atajo: buscar si ya existe una conversación activa para este documento ──
+  // Busca en el caché de conversaciones por relative_path (índice pre-existente)
+  const existingConv = Object.values(conversationsCache).find(
+    c => c.type === "xampp" && c.relative_path === doc.relative_path
+  );
 
-  // 3. Asignar el nombre del archivo seleccionado de XAMPP al contenedor visual
-  const fileNameEl = document.getElementById("pdfFileName");
-  if (fileNameEl) {
-    fileNameEl.textContent = filename;
+  if (existingConv) {
+    // Ya está indexado y en memoria → cargar directamente, sin llamar al backend
+    currentTab = "pdf";
+    showResultsView();
+    activeConversationId = existingConv.id;
+    pdfReady = true;
+    pdfLoadedName = doc.name;
+    chatMessages["pdf"] = existingConv.history || [];
+    renderHistory();
+    refreshPdfBadge();
+    renderSidebar();
+    scrollToBottom();
+
+    const chatHistory = document.getElementById("chatHistory");
+    if (chatHistory && (!existingConv.history || existingConv.history.length === 0)) {
+      chatHistory.innerHTML = `
+        <div class="chat-bubble assistant">
+          <div class="bubble-icon bot-icon"><i class="fas fa-robot"></i></div>
+          <div class="bubble-text">
+            ✅ Documento <strong>${doc.name}</strong> listo desde la Base de Datos. ¿En qué puedo ayudarte?
+          </div>
+        </div>
+      `;
+    }
+    return;
   }
 
-  // 4. Simular o guardar que el origen es un archivo listo para preguntar
-  // Cambiamos a la vista de resultados (pantalla de hacer preguntas)
-  document.getElementById("main-view").style.display = "none";
-  document.getElementById("main-footer").style.display = "none";
-  document.getElementById("results-view").style.display = "flex";
+  // ── Si no está en caché local, verificar en el backend (puede haberse reiniciado la página) ──
+  // Cambiar a pestaña pdf y mostrar vista de resultados
+  currentTab = "pdf";
+  showResultsView();
 
-  // 5. Limpiar el historial de chat viejo en pantalla para dejarlo en blanco (como la imagen 2)
-  const chatContainer = document.getElementById("chatContainer");
-  if (chatContainer) {
-    chatContainer.innerHTML = `
-      <div class="message ai-message">
+  // Mostrar indicador de carga en el chat
+  const chatHistory = document.getElementById("chatHistory");
+  if (chatHistory) {
+    chatHistory.innerHTML = `
+      <div class="chat-bubble assistant">
+        <div class="bubble-icon bot-icon"><i class="fas fa-robot"></i></div>
         <div class="bubble-text">
-          He cargado el documento <strong>${filename}</strong> desde el servidor. ¿En qué puedo ayudarte hoy?
+          <div class="ai-typing" style="display:flex;"><span></span><span></span><span></span></div>
+          <span style="color:#70757a; font-size:13px;">Cargando <strong>${doc.name}</strong> desde la BD...</span>
         </div>
       </div>
     `;
   }
 
-  // Opcional: Si tu API requiere inicializar el documento XAMPP en el backend al hacer click, 
-  // puedes descomentar la siguiente línea llamando a tu endpoint:
-  // selectXamppDocumentOnBackend(filename);
+  try {
+    const fd = new FormData();
+    fd.append("path", doc.relative_path);
+    const res = await fetch(`${API}/index_xampp_document/`, { method: "POST", body: fd });
+    const data = await res.json();
+
+    if (!res.ok || !data.conversation_id) {
+      if (chatHistory) {
+        chatHistory.innerHTML = `
+          <div class="chat-bubble assistant">
+            <div class="bubble-icon bot-icon"><i class="fas fa-robot"></i></div>
+            <div class="bubble-text" style="color:#c5221f;">
+              ❌ Error al cargar el documento: ${data.error || "Error desconocido"}
+            </div>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    // Registrar la conversación y activarla
+    activeConversationId = data.conversation_id;
+    pdfReady = true;
+    pdfLoadedName = doc.name;
+    chatMessages["pdf"] = [];
+
+    // Cargar en caché y sidebar
+    await fetchConversations();
+
+    // Mensaje de bienvenida en el chat
+    if (chatHistory) {
+      chatHistory.innerHTML = `
+        <div class="chat-bubble assistant">
+          <div class="bubble-icon bot-icon"><i class="fas fa-robot"></i></div>
+          <div class="bubble-text">
+            ✅ He cargado el documento <strong>${doc.name}</strong> desde la Base de Datos. ¿En qué puedo ayudarte?
+          </div>
+        </div>
+      `;
+    }
+
+    refreshPdfBadge();
+    renderSidebar();
+    scrollToBottom();
+
+  } catch(err) {
+    if (chatHistory) {
+      chatHistory.innerHTML = `
+        <div class="chat-bubble assistant">
+          <div class="bubble-icon bot-icon"><i class="fas fa-robot"></i></div>
+          <div class="bubble-text" style="color:#c5221f;">
+            ❌ Error de conexión con la API: ${err.message}
+          </div>
+        </div>
+      `;
+    }
+  }
 }
 
 function switchTab(tab) {
@@ -1502,32 +1676,58 @@ async function askQuestion(q) {
     alert("❌ Sube un documento o selecciona una conversación antes de preguntar.");
     return;
   }
-  chatMessages[currentTab].push({ role: "user", content: q });
+
+  // Determinar la clave correcta para chatMessages
+  const msgKey = (currentTab === "xampp") ? "pdf" : currentTab;
+
+  chatMessages[msgKey].push({ role: "user", content: q });
   renderHistory();
   scrollToBottom();
   showTyping();
+
   const fd = new FormData();
   fd.append("question", q);
   fd.append("conversation_id", activeConversationId);
+
   let endpoint;
-  if (
-    currentTab === "pdf" ||
-    currentTab === "xampp"
-    ) {
+  if (currentTab === "pdf" || currentTab === "xampp") {
     const style = document.getElementById("styleSelect")?.value || "normal";
     fd.append("style", style);
     endpoint = `${API}/ask_pdf/`;
-  } else { endpoint = `${API}/ask_folder/`; }
+  } else {
+    endpoint = `${API}/ask_folder/`;
+  }
+
   try {
     const res = await fetch(endpoint, { method: "POST", body: fd });
     const data = await res.json();
     hideTyping();
-    await fetchConversations();
-    await loadConversation(activeConversationId);
+
+    if (!res.ok) {
+      chatMessages[msgKey].push({ role: "assistant", content: `❌ Error: ${data.error || "Error desconocido"}` });
+      renderHistory();
+      scrollToBottom();
+      return;
+    }
+
+    // Añadir la respuesta al historial local directamente (sin recargar todo desde el servidor)
+    chatMessages[msgKey].push({
+      role: "assistant",
+      content: data.answer,
+      sources: data.sources || []
+    });
+
+    renderHistory();
     scrollToBottom();
+
+    // Actualizar caché de conversaciones en segundo plano
+    fetchConversations();
+
   } catch(e) {
     hideTyping();
-    alert("❌ Error de conexión con la API.");
+    chatMessages[msgKey].push({ role: "assistant", content: "❌ Error de conexión con la API." });
+    renderHistory();
+    scrollToBottom();
   }
 }
 
@@ -1644,6 +1844,8 @@ window.addEventListener("DOMContentLoaded", () => {
   switchTab("pdf");
   fetchConversations();
   initTransparentHeader();
+  // Comenzar a monitorear la pre-indexación del servidor
+  pollPreindexStatus();
 });
 </script>
 </body>

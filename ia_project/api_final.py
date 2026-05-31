@@ -31,16 +31,179 @@ from datetime import datetime
 load_dotenv()
 
 # =======================================
-# LIFESPAN: LIMPIEZA AL INICIO Y AL CIERRE
+# ESTADO DE PRE-INDEXACIÓN
+# =======================================
+PREINDEX_STATUS = {
+    "running": False,
+    "done": False,
+    "total": 0,
+    "indexed": 0,
+    "errors": 0,
+    "current_file": "",
+    "log": []          # lista de mensajes para el frontend
+}
+
+# Mapa: relative_path → conversation_id  (para lookup rápido al hacer clic)
+PREINDEX_MAP: dict[str, str] = {}
+
+def _preindex_single_document(doc: dict) -> tuple[str, str | None]:
+    """
+    Indexa un documento de XAMPP en hilo de fondo.
+    Devuelve (relative_path, conversation_id | None).
+    """
+    full_path  = doc["full_path"]
+    rel_path   = doc["relative_path"]
+    file_name  = doc["name"]
+    ext        = os.path.splitext(full_path)[1].lower()
+
+    try:
+        raw_docs = []
+
+        if ext == ".pdf":
+            raw_docs = extract_pdf_parallel(full_path)
+
+        elif ext == ".txt":
+            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            raw_docs = [Document(page_content=content,
+                                 metadata={"source": full_path, "page": 1})]
+        else:
+            return rel_path, None
+
+        if not raw_docs:
+            return rel_path, None
+
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
+        docs     = splitter.split_documents(raw_docs)
+
+        conv_id  = f"xampp_{uuid.uuid4().hex[:8]}"
+        conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
+
+        vectorstore = FAISS.from_documents(docs, embeddings)
+        vectorstore.save_local(conv_dir)
+
+        meta = load_metadata()
+        meta[conv_id] = {
+            "id":          conv_id,
+            "title":       file_name,
+            "type":        "xampp",
+            "target_name": file_name,
+            "file_path":   full_path,
+            "relative_path": rel_path,
+            "history":     [],
+            "created_at":  datetime.now().isoformat()
+        }
+        save_metadata(meta)
+        # NO registrar como sesión temporal — es un índice permanente de la BD
+
+        # Persistir en disco para sobrevivir reinicios
+        pmap = load_preindex_map()
+        pmap[rel_path] = conv_id
+        save_preindex_map(pmap)
+
+        print(f"  ✅ Pre-indexado: {file_name}  →  {conv_id}")
+        return rel_path, conv_id
+
+    except Exception as e:
+        print(f"  ⚠️ Error pre-indexando {file_name}: {e}")
+        return rel_path, None
+
+
+def run_preindex():
+    """Ejecuta la pre-indexación completa en un hilo de fondo.
+    Solo indexa documentos nuevos; los ya indexados se recuperan del mapa persistente.
+    """
+    global PREINDEX_STATUS, PREINDEX_MAP
+
+    PREINDEX_STATUS["running"] = True
+    PREINDEX_STATUS["done"]    = False
+    PREINDEX_STATUS["log"]     = []
+
+    # ── Recuperar índices pre-existentes del disco ──
+    persisted = load_preindex_map()
+    meta       = load_metadata()
+
+    # Validar que el índice en disco sigue existiendo para cada entrada persistida
+    valid_persisted = {}
+    for rel_path, conv_id in persisted.items():
+        conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
+        if conv_id in meta and os.path.exists(conv_dir):
+            valid_persisted[rel_path] = conv_id
+        else:
+            print(f"  ⚠️ Índice huérfano descartado: {rel_path} → {conv_id}")
+
+    # Sincronizar mapa en memoria con los válidos
+    PREINDEX_MAP.update(valid_persisted)
+    if len(valid_persisted) != len(persisted):
+        save_preindex_map(valid_persisted)   # limpiar entradas huérfanas
+
+    if valid_persisted:
+        print(f"⚡ {len(valid_persisted)} documento(s) ya pre-indexados — omitiendo re-indexación.")
+
+    docs = scan_xampp_documents()
+    PREINDEX_STATUS["total"] = len(docs)
+
+    # Filtrar solo los que aún no están indexados
+    pending = [d for d in docs if d["relative_path"] not in PREINDEX_MAP]
+
+    if not pending:
+        print("✅ Todos los documentos de la BD ya están indexados — nada que hacer.")
+        PREINDEX_STATUS["indexed"] = len(valid_persisted)
+        PREINDEX_STATUS["running"] = False
+        PREINDEX_STATUS["done"]    = True
+        return
+
+    print(f"⚙️  Pre-indexando {len(pending)} documento(s) nuevo(s) de la BD...")
+
+    futures = {}
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        for doc in pending:
+            PREINDEX_STATUS["current_file"] = doc["name"]
+            f = pool.submit(_preindex_single_document, doc)
+            futures[f] = doc["name"]
+
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                rel_path, conv_id = future.result()
+                if conv_id:
+                    PREINDEX_MAP[rel_path] = conv_id
+                    PREINDEX_STATUS["indexed"] += 1
+                    msg = f"✅ {name}"
+                else:
+                    PREINDEX_STATUS["errors"] += 1
+                    msg = f"⚠️ {name} (sin contenido o error)"
+            except Exception as e:
+                PREINDEX_STATUS["errors"] += 1
+                msg = f"❌ {name}: {e}"
+
+            PREINDEX_STATUS["log"].append(msg)
+            PREINDEX_STATUS["current_file"] = name
+
+    PREINDEX_STATUS["indexed"] += len(valid_persisted)   # contar los recuperados también
+    PREINDEX_STATUS["running"] = False
+    PREINDEX_STATUS["done"]    = True
+    print(f"✅ Pre-indexación completa: {PREINDEX_STATUS['indexed']} OK, "
+          f"{PREINDEX_STATUS['errors']} errores.")
+
+
+# =======================================
+# LIFESPAN: LIMPIEZA + PRE-INDEXACIÓN
 # =======================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🚀 Servidor iniciado — limpiando datos de sesión anterior...")
-    delete_all_conversations()
+    print("🚀 Servidor iniciado — limpiando sesiones de usuario anteriores...")
+    delete_user_conversations()   # ← solo borra sesiones de usuario, NO índices de la BD
     start_cleanup_scheduler()
+
+    # Lanzar pre-indexación en hilo de fondo (reutiliza índices existentes si los hay)
+    preindex_thread = threading.Thread(target=run_preindex, daemon=True)
+    preindex_thread.start()
+
     yield
-    print("🛑 Servidor apagado — eliminando todos los datos de sesión...")
-    delete_all_conversations()
+
+    print("🛑 Servidor apagado — eliminando sesiones de usuario...")
+    delete_user_conversations()   # ← conserva índices de la BD para el próximo arranque
 
 app = FastAPI(title="CFE Intelligent Document & Vision API", version="4.2", lifespan=lifespan)
 
@@ -70,6 +233,7 @@ SUPPORTED_EXTENSIONS = [".pdf"]
 INDICES_BASE_DIR    = "stored_conversations"
 METADATA_FILE       = os.path.join(INDICES_BASE_DIR, "conversations.json")
 TEMP_SESSIONS_FILE  = os.path.join(INDICES_BASE_DIR, "temp_sessions.json")
+PREINDEX_MAP_FILE   = os.path.join(INDICES_BASE_DIR, "preindex_map.json")  # ← persistente en disco
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(INDICES_BASE_DIR, exist_ok=True)
@@ -87,6 +251,21 @@ _executor   = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 GROQ_CONCURRENCY = 6
 
 CANCELLATION_TOKENS = {}
+
+def load_preindex_map() -> dict:
+    """Carga el mapa de pre-indexación persistente desde disco."""
+    if os.path.exists(PREINDEX_MAP_FILE):
+        try:
+            with open(PREINDEX_MAP_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_preindex_map(pmap: dict):
+    """Guarda el mapa de pre-indexación en disco (sobrevive reinicios)."""
+    with open(PREINDEX_MAP_FILE, "w", encoding="utf-8") as f:
+        json.dump(pmap, f, ensure_ascii=False, indent=4)
 
 def load_metadata() -> dict:
     if os.path.exists(METADATA_FILE):
@@ -160,6 +339,53 @@ def delete_conversation_files(conversation_id: str):
             print(f"🧹 Limpiados archivos de conversación: {conversation_id}")
         except Exception as e:
             print(f"⚠️ Error limpiando {conversation_id}: {e}")
+
+def delete_user_conversations():
+    """
+    Borra únicamente las conversaciones subidas por el usuario (tipo 'pdf' y 'folder').
+    Los índices pre-indexados de la BD (tipo 'xampp') se conservan en disco
+    para no tener que re-indexar al reiniciar el servidor.
+    """
+    meta = load_metadata()
+    xampp_ids = {cid for cid, data in meta.items() if data.get("type") == "xampp"}
+
+    # Eliminar del metadata solo las no-xampp
+    new_meta = {cid: data for cid, data in meta.items() if cid in xampp_ids}
+
+    # Borrar directorios de conversaciones de usuario
+    if os.path.exists(INDICES_BASE_DIR):
+        for item in os.listdir(INDICES_BASE_DIR):
+            item_path = os.path.join(INDICES_BASE_DIR, item)
+            if os.path.isdir(item_path) and item not in xampp_ids:
+                try:
+                    shutil.rmtree(item_path)
+                except Exception as e:
+                    print(f"⚠️ Error eliminando índice de usuario {item_path}: {e}")
+
+    save_metadata(new_meta)
+
+    # Limpiar temp_sessions (solo sesiones de usuario)
+    if os.path.exists(TEMP_SESSIONS_FILE):
+        try:
+            os.remove(TEMP_SESSIONS_FILE)
+        except:
+            pass
+
+    # Limpiar archivos PDF subidos por el usuario
+    if os.path.exists(UPLOAD_DIR):
+        for item in os.listdir(UPLOAD_DIR):
+            item_path = os.path.join(UPLOAD_DIR, item)
+            try:
+                if os.path.isfile(item_path):
+                    os.remove(item_path)
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+            except Exception as e:
+                print(f"⚠️ Error eliminando archivo {item_path}: {e}")
+
+    os.makedirs(INDICES_BASE_DIR, exist_ok=True)
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    print(f"🧹 Sesiones de usuario limpiadas. Índices BD conservados: {len(xampp_ids)}.")
 
 def delete_all_conversations():
     if os.path.exists(METADATA_FILE):
@@ -337,18 +563,47 @@ def scan_xampp_documents():
 @app.get("/xampp_documents/")
 async def xampp_documents():
     docs = scan_xampp_documents()
-
+    # Añadir flag indicando si cada documento ya está pre-indexado
+    for doc in docs:
+        doc["preindexed"] = doc["relative_path"] in PREINDEX_MAP
     return {
         "total": len(docs),
         "documents": docs
     }
 
+@app.get("/preindex_status/")
+async def preindex_status():
+    """Devuelve el estado actual de la pre-indexación al arranque."""
+    return {
+        "running":      PREINDEX_STATUS["running"],
+        "done":         PREINDEX_STATUS["done"],
+        "total":        PREINDEX_STATUS["total"],
+        "indexed":      PREINDEX_STATUS["indexed"],
+        "errors":       PREINDEX_STATUS["errors"],
+        "current_file": PREINDEX_STATUS["current_file"],
+        "log":          PREINDEX_STATUS["log"][-20:],   # últimos 20 mensajes
+    }
+
 # =======================================
 # INDEXAR DOCUMENTO DE XAMPP
+# (usa el índice pre-generado si ya está listo)
 # =======================================
 
 @app.post("/index_xampp_document/")
 async def index_xampp_document(path: str = Form(...)):
+
+    # ── Atajo: si ya fue pre-indexado, devolver el ID directamente ──
+    if path in PREINDEX_MAP:
+        conv_id = PREINDEX_MAP[path]
+        meta    = load_metadata()
+        if conv_id in meta:
+            print(f"⚡ Usando índice pre-generado para: {path} → {conv_id}")
+            return {
+                "conversation_id": conv_id,
+                "message": "✅ Documento ya pre-indexado — listo para preguntar"
+            }
+        # Si el índice fue eliminado (raro), caer al flujo normal
+        del PREINDEX_MAP[path]
 
     full_path = os.path.join(XAMPP_DOCS_PATH, path)
 
@@ -364,16 +619,9 @@ async def index_xampp_document(path: str = Form(...)):
 
         raw_docs = []
 
-        # ======================
-        # PDF
-        # ======================
-
         if ext == ".pdf":
-            raw_docs = extract_pdf_parallel(full_path)
-
-        # ======================
-        # TXT
-        # ======================
+            loop = asyncio.get_event_loop()
+            raw_docs = await loop.run_in_executor(_executor, partial(extract_pdf_parallel, full_path))
 
         elif ext == ".txt":
 
@@ -383,10 +631,7 @@ async def index_xampp_document(path: str = Form(...)):
             raw_docs = [
                 Document(
                     page_content=content,
-                    metadata={
-                        "source": full_path,
-                        "page": 1
-                    }
+                    metadata={"source": full_path, "page": 1}
                 )
             ]
 
@@ -405,31 +650,33 @@ async def index_xampp_document(path: str = Form(...)):
 
         meta = load_metadata()
 
-        conv_idx = len(meta) + 1
-
-        conv_id = f"xampp_{conv_idx}"
-
+        conv_id  = f"xampp_{uuid.uuid4().hex[:8]}"
         conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
 
         vectorstore = FAISS.from_documents(docs, embeddings)
-
         vectorstore.save_local(conv_dir)
 
         file_name = os.path.basename(full_path)
 
         meta[conv_id] = {
-            "id": conv_id,
-            "title": file_name,
-            "type": "xampp",
-            "target_name": file_name,
-            "file_path": full_path,
-            "history": [],
-            "created_at": datetime.now().isoformat()
+            "id":            conv_id,
+            "title":         file_name,
+            "type":          "xampp",
+            "target_name":   file_name,
+            "file_path":     full_path,
+            "relative_path": path,
+            "history":       [],
+            "created_at":    datetime.now().isoformat()
         }
 
         save_metadata(meta)
+        # NO registrar como sesión temporal — índice permanente de la BD
 
-        register_temp_session(conv_id)
+        # Persistir en disco para sobrevivir reinicios
+        PREINDEX_MAP[path] = conv_id
+        pmap = load_preindex_map()
+        pmap[path] = conv_id
+        save_preindex_map(pmap)
 
         return {
             "conversation_id": conv_id,
@@ -450,12 +697,27 @@ async def index_xampp_document(path: str = Form(...)):
 async def list_conversations():
     return load_metadata()
 
+@app.post("/clear_conversation_history/")
+async def clear_conversation_history(id: str = Form(...)):
+    """
+    Limpia el historial de chat de una conversación sin borrar el índice FAISS.
+    Usado para conversaciones de tipo 'xampp' cuyos índices son permanentes.
+    """
+    meta = load_metadata()
+    if id not in meta:
+        return JSONResponse(status_code=404, content={"error": "Conversación no encontrada"})
+
+    meta[id]["history"] = []
+    save_metadata(meta)
+    return {"message": f"✅ Historial de conversación {id} limpiado correctamente"}
+
 @app.post("/delete_conversation/")
 async def delete_conversation(id: str = Form(...)):
     meta = load_metadata()
     if id not in meta:
         return JSONResponse(status_code=404, content={"error": "Conversación no encontrada"})
     
+    conv_data = meta[id]
     conv_dir = os.path.join(INDICES_BASE_DIR, id)
     if os.path.exists(conv_dir):
         try:
@@ -466,6 +728,17 @@ async def delete_conversation(id: str = Form(...)):
     del meta[id]
     save_metadata(meta)
     unregister_temp_session(id)
+
+    # Si era un índice de BD, eliminarlo también del mapa persistente
+    if conv_data.get("type") == "xampp":
+        rel_path = conv_data.get("relative_path", "")
+        pmap = load_preindex_map()
+        if rel_path in pmap:
+            del pmap[rel_path]
+            save_preindex_map(pmap)
+        if rel_path in PREINDEX_MAP:
+            del PREINDEX_MAP[rel_path]
+
     return {"message": f"✅ Conversación {id} eliminada correctamente"}
 
 # =======================================
@@ -785,6 +1058,7 @@ async def preview_file(path: str):
 # =======================================
 @app.post("/clear_index/")
 async def clear_index():
+    global PREINDEX_MAP
     for path in (UPLOAD_DIR, INDICES_BASE_DIR):
         if os.path.exists(path):
             try:
@@ -795,12 +1069,13 @@ async def clear_index():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(INDICES_BASE_DIR, exist_ok=True)
     save_temp_sessions({})
+    PREINDEX_MAP.clear()   # limpiar también el mapa en memoria
     return {"message": "✅ Índices de memoria, disco y archivos cargados eliminados."}
 
 @app.post("/clear_all_sessions/")
 async def clear_all_sessions():
-    delete_all_conversations()
-    return {"message": "✅ Todas las sesiones y archivos de sesión eliminados correctamente."}
+    delete_user_conversations()
+    return {"message": "✅ Sesiones de usuario eliminadas. Los índices de la BD se conservaron."}
 
 @app.get("/health")
 async def health():
