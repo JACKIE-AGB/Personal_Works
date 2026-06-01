@@ -969,6 +969,51 @@
 .dropdown-arrow.rotated {
   transform: rotate(90deg);
 }
+
+/* Transición suave para ocultar/mostrar la zona de carga en resultados */
+.results-action-area {
+  transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out, opacity 0.2s ease;
+  overflow: hidden;
+  max-height: 250px; /* Altura máxima estimada cuando está expandido */
+  opacity: 1;
+}
+
+.results-action-area.collapsed {
+  max-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  opacity: 0;
+  border-bottom: none;
+  pointer-events: none;
+}
+
+/* Estilo para el botón moderno que controla el despliegue */
+.toggle-panel-btn {
+  background: none;
+  border: none;
+  color: #1a73e8;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  transition: background 0.2s;
+}
+
+.toggle-panel-btn:hover {
+  background: rgba(26, 115, 232, 0.08);
+}
+
+.toggle-panel-btn i {
+  transition: transform 0.3s ease;
+}
+
+.toggle-panel-btn.collapsed i {
+  transform: rotate(-180deg);
+}
   </style>
 </head>
 <body>
@@ -1120,14 +1165,21 @@
             </div>
           </div>
         </div>
-        <div class="results-tabs-bar">
-          <button class="results-tab active" id="rtabPdf" onclick="switchTab('pdf')">
-            <i class="fas fa-file-pdf"></i> PDF Individual
-          </button>
-          <button class="results-tab" id="rtabFolder" onclick="switchTab('folder')">
-            <i class="fas fa-folder-open"></i> Carpeta de Documentos
-          </button>
-        </div>
+<div class="results-tabs-bar" style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding-right: 20px;">
+  <div style="display: flex; gap: 12px;">
+    <button class="results-tab active" id="rtabPdf" onclick="switchTab('pdf')">
+      <i class="fas fa-file-pdf"></i> PDF Individual
+    </button>
+    <button class="results-tab" id="rtabFolder" onclick="switchTab('folder')">
+      <i class="fas fa-folder-open"></i> Carpeta de Documentos
+    </button>
+  </div>
+  
+  <!-- ESTE ES EL NUEVO BOTÓN INTERACTIVO -->
+  <button class="toggle-panel-btn" id="btnTogglePanel" onclick="toggleResultsPanel()">
+    <span>Ocultar herramientas</span> <i class="fas fa-chevron-up"></i>
+  </button>
+</div>
         <div id="panelContainerResults" class="results-action-area"></div>
       </div>
       <div class="results-body">
@@ -1163,7 +1215,7 @@
 </div>
 
 <script>
-const API = "https://nothing-advancement-spec-cuts.trycloudflare.com";
+const API = "https://imposed-horn-metal-scales.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1246,6 +1298,24 @@ async function toggleXamppDocuments() {
     arrow.classList.remove("rotated");
   }
 }
+
+function toggleResultsPanel() {
+  const panelContainer = document.getElementById("panelContainerResults");
+  const toggleBtn = document.getElementById("btnTogglePanel");
+  
+  if (!panelContainer || !toggleBtn) return;
+  
+  const isCollapsed = panelContainer.classList.toggle("collapsed");
+  toggleBtn.classList.toggle("collapsed", isCollapsed);
+  
+  // Cambiar el texto dinámicamente para que sea intuitivo
+  const btnText = toggleBtn.querySelector("span");
+  if (btnText) {
+    btnText.textContent = isCollapsed ? "Mostrar herramientas" : "Ocultar herramientas";
+  }
+}
+
+document.getElementById("panelContainerResults").classList.remove("collapsed");
 
 function getDeletedConversations() {
   const stored = localStorage.getItem(STORAGE_KEY);
