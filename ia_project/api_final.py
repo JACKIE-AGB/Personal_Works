@@ -222,7 +222,7 @@ if not GROQ_API_KEY:
 # =======================================
 # CONFIGURACIÓN DE MODELOS Y RUTAS PERSISTENTES
 # =======================================
-VISION_MODEL = "llama-3.2-90b-vision-instruct"
+VISION_MODEL = "llama-3.2-11b-vision-instruct"
 TEXT_MODEL   = "llama-3.3-70b-versatile"
 
 MAX_DOCUMENTS       = 150
