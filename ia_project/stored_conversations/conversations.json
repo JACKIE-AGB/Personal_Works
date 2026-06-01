@@ -68,5 +68,25 @@
         "relative_path": "data_warehouse.pdf",
         "history": [],
         "created_at": "2026-05-31T12:44:46.259149"
+    },
+    "xampp_d4de8e17": {
+        "id": "xampp_d4de8e17",
+        "title": "Folleto CJN.pdf",
+        "type": "xampp",
+        "target_name": "Folleto CJN.pdf",
+        "file_path": "C:\\xampp\\htdocs\\ia_docs\\Folleto CJN.pdf",
+        "relative_path": "Folleto CJN.pdf",
+        "history": [],
+        "created_at": "2026-06-01T09:06:12.830303"
+    },
+    "xampp_e2fc0838": {
+        "id": "xampp_e2fc0838",
+        "title": "Libro de Datos Técnicos P. H. El Cajón.pdf",
+        "type": "xampp",
+        "target_name": "Libro de Datos Técnicos P. H. El Cajón.pdf",
+        "file_path": "C:\\xampp\\htdocs\\ia_docs\\Libro de Datos Técnicos P. H. El Cajón.pdf",
+        "relative_path": "Libro de Datos Técnicos P. H. El Cajón.pdf",
+        "history": [],
+        "created_at": "2026-06-01T09:07:28.927430"
     }
 }

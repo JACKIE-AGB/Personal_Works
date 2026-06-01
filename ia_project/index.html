@@ -1052,7 +1052,7 @@
 </div>
 
 <script>
-const API = "https://thu-serial-seafood-make.trycloudflare.com";
+const API = "https://scenes-preliminary-burns-gis.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1303,7 +1303,16 @@ async function fetchConversations() {
 function renderSidebar() {
   const container = document.getElementById("sidebarHistoryList");
   container.innerHTML = "";
-  Object.values(conversationsCache).reverse().forEach(conv => {
+  // Solo mostrar conversaciones que tengan al menos un mensaje en el historial.
+  // Los documentos xampp pre-indexados sin conversación activa no aparecen en sidebar
+  // hasta que el usuario haga su primera pregunta.
+  const visibleConvs = Object.values(conversationsCache).filter(conv => {
+    if (conv.type === "xampp") {
+      return conv.history && conv.history.length > 0;
+    }
+    return true; // PDFs y carpetas siempre se muestran
+  });
+  visibleConvs.reverse().forEach(conv => {
     const isSelected = conv.id === activeConversationId ? "active" : "";
     const icon = conv.type === "folder"
       ? "fa-folder-open"
