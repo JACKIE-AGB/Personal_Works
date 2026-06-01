@@ -839,17 +839,128 @@
     }
     /* Añadir dentro de <style> */
 .xampp-dropdown {
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   transition: max-height 0.3s ease-out, opacity 0.3s ease;
-  max-height: 500px; /* Un valor lo suficientemente alto para el contenido */
+  max-height: 340px; /* Altura fija — scroll si hay más contenido */
   opacity: 1;
+  /* Scrollbar delgada y discreta */
+  scrollbar-width: thin;
+  scrollbar-color: #c8cace transparent;
+}
+.xampp-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+.xampp-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+.xampp-dropdown::-webkit-scrollbar-thumb {
+  background: #c8cace;
+  border-radius: 4px;
+}
+.xampp-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #9aa0a6;
 }
 
 .xampp-dropdown.collapsed {
   max-height: 0;
   opacity: 0;
   pointer-events: none;
+  overflow: hidden;
 }
+
+/* ── Árbol de carpetas XAMPP ── */
+
+.xampp-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 8px;
+  margin: 1px 4px;
+  transition: background 0.15s ease;
+  user-select: none;
+}
+.xampp-folder-row:hover {
+  background: #f1f3f4;
+}
+
+.xampp-folder-arrow {
+  font-size: 10px;
+  color: #9aa0a6;
+  width: 10px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+.xampp-folder-arrow.rotated {
+  transform: rotate(90deg);
+}
+
+.xampp-folder-icon {
+  font-size: 13px;
+  color: #f9ab00;
+  flex-shrink: 0;
+}
+
+.xampp-folder-name {
+  font-size: 13px;
+  color: #3c4043;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xampp-folder-children {
+  overflow: hidden;
+  max-height: 2000px;
+  transition: max-height 0.25s ease-out, opacity 0.2s ease;
+  opacity: 1;
+}
+.xampp-folder-children.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.xampp-file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  border-radius: 8px;
+  margin: 1px 4px;
+  transition: background 0.15s ease;
+}
+.xampp-file-row:hover {
+  background: #e8f0fe;
+}
+
+.xampp-file-icon {
+  font-size: 12px;
+  color: #ea4335;
+  flex-shrink: 0;
+}
+
+.xampp-file-name {
+  font-size: 12px;
+  color: #5f6368;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.xampp-badge {
+  font-size: 10px;
+  border-radius: 8px;
+  padding: 2px 5px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.xampp-badge.ready  { color: #137333; background: #e6f4ea; }
+.xampp-badge.loading { color: #b06000; background: #fef7e0; }
 
 .dropdown-arrow {
   transition: transform 0.3s ease;
@@ -1052,7 +1163,7 @@
 </div>
 
 <script>
-const API = "https://scenes-preliminary-burns-gis.trycloudflare.com";
+const API = "https://interactive-cuts-brother-corp.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1221,62 +1332,111 @@ async function loadXamppDocuments() {
 }
 
 // ======================================
-// RENDER DOCUMENTOS XAMPP
+// RENDER DOCUMENTOS XAMPP — ÁRBOL DE CARPETAS
 // ======================================
 
+/**
+ * Convierte la lista plana de documentos (con relative_path) en un árbol de nodos.
+ * Cada nodo es: { name, children: {}, docs: [] }
+ */
+function buildFolderTree(docs) {
+  const root = { children: {}, docs: [] };
+  docs.forEach(doc => {
+    const parts = doc.relative_path.replace(/\\/g, "/").split("/");
+    let node = root;
+    // Si el archivo está en la raíz (sin carpeta) solo hay 1 parte
+    for (let i = 0; i < parts.length - 1; i++) {
+      const folder = parts[i];
+      if (!node.children[folder]) {
+        node.children[folder] = { name: folder, children: {}, docs: [] };
+      }
+      node = node.children[folder];
+    }
+    node.docs.push(doc);
+  });
+  return root;
+}
+
+/**
+ * Genera el HTML de un nodo del árbol (recursivo).
+ * depth controla el indent visual.
+ */
+function renderTreeNode(node, depth, container) {
+  const indent = depth * 14; // px de sangría por nivel
+
+  // ── Subcarpetas ──
+  Object.values(node.children).forEach(child => {
+    const folderId = `xfolder_${Math.random().toString(36).slice(2)}`;
+
+    // Cabecera de carpeta (clickeable)
+    const folderRow = document.createElement("div");
+    folderRow.className = "xampp-folder-row";
+    folderRow.style.paddingLeft = `${12 + indent}px`;
+    folderRow.innerHTML = `
+      <i class="fas fa-chevron-right xampp-folder-arrow" id="arr_${folderId}"></i>
+      <i class="fas fa-folder xampp-folder-icon"></i>
+      <span class="xampp-folder-name">${child.name}</span>
+    `;
+
+    // Contenedor de hijos (colapsado por defecto)
+    const childContainer = document.createElement("div");
+    childContainer.className = "xampp-folder-children collapsed";
+    childContainer.id = folderId;
+
+    folderRow.onclick = () => {
+      const isCollapsed = childContainer.classList.contains("collapsed");
+      const arrow = document.getElementById(`arr_${folderId}`);
+      if (isCollapsed) {
+        childContainer.classList.remove("collapsed");
+        if (arrow) arrow.classList.add("rotated");
+        // Cambiar ícono de carpeta a abierta
+        folderRow.querySelector(".xampp-folder-icon").classList.replace("fa-folder", "fa-folder-open");
+      } else {
+        childContainer.classList.add("collapsed");
+        if (arrow) arrow.classList.remove("rotated");
+        folderRow.querySelector(".xampp-folder-icon").classList.replace("fa-folder-open", "fa-folder");
+      }
+    };
+
+    container.appendChild(folderRow);
+    container.appendChild(childContainer);
+
+    // Recursivo: rellenar hijos
+    renderTreeNode(child, depth + 1, childContainer);
+  });
+
+  // ── Documentos en este nodo ──
+  node.docs.forEach(doc => {
+    const icon = doc.name.toLowerCase().endsWith(".pdf") ? "fa-file-pdf" : "fa-file-lines";
+    const readyBadge = doc.preindexed
+      ? `<span class="xampp-badge ready">⚡ Listo</span>`
+      : `<span class="xampp-badge loading">⏳</span>`;
+
+    const fileRow = document.createElement("div");
+    fileRow.className = "xampp-file-row";
+    fileRow.style.paddingLeft = `${28 + indent}px`;
+    fileRow.innerHTML = `
+      <i class="fas ${icon} xampp-file-icon"></i>
+      <span class="xampp-file-name" title="${doc.relative_path}">${doc.name}</span>
+      ${readyBadge}
+    `;
+    fileRow.onclick = () => selectXamppDocument(doc);
+    container.appendChild(fileRow);
+  });
+}
+
 function renderXamppDocuments() {
-
   const container = document.getElementById("xamppDocumentsList");
-
   if (!container) return;
-
   container.innerHTML = "";
 
   if (xamppDocuments.length === 0) {
-
-    container.innerHTML = `
-      <div class="history-card">
-        <div class="history-card-title">
-          Sin documentos
-        </div>
-      </div>
-    `;
-
+    container.innerHTML = `<div class="history-card"><div class="history-card-title">Sin documentos</div></div>`;
     return;
   }
 
-  xamppDocuments.forEach(doc => {
-
-    const icon = doc.name.endsWith(".pdf") ? "fa-file-pdf" : "fa-file-lines";
-
-    // Badge de estado: ⚡ listo, ⏳ aún indexando
-    const readyBadge = doc.preindexed
-      ? `<span style="font-size:10px; color:#137333; background:#e6f4ea; border-radius:8px; padding:2px 6px; margin-left:4px;">⚡ Listo</span>`
-      : `<span style="font-size:10px; color:#b06000; background:#fef7e0; border-radius:8px; padding:2px 6px; margin-left:4px;">⏳ Cargando</span>`;
-
-    const div = document.createElement("div");
-
-    div.className = "history-card";
-
-    div.innerHTML = `
-      <div class="history-card-title">
-        <span style="display:flex; align-items:center; gap:6px; overflow:hidden;">
-          <i class="fas ${icon}" style="color:#9aa0a6; flex-shrink:0;"></i>
-          <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${doc.name}</span>
-        </span>
-        ${readyBadge}
-      </div>
-      <div class="history-card-subtext">
-        ${doc.relative_path}
-      </div>
-    `;
-
-    div.onclick = () => selectXamppDocument(doc);
-
-    container.appendChild(div);
-
-  });
-
+  const tree = buildFolderTree(xamppDocuments);
+  renderTreeNode(tree, 0, container);
 }
 
 function toggleSidebar() {
