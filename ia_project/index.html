@@ -911,6 +911,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.xampp-folder-name:hover {
+  color: #1a73e8;
+  text-decoration: underline;
+}
 
 .xampp-folder-children {
   overflow: hidden;
@@ -1215,7 +1219,7 @@
 </div>
 
 <script>
-const API = "https://correspondence-wherever-bennett-sum.trycloudflare.com";
+const API = "https://recovered-networking-racing-dan.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1438,14 +1442,14 @@ function renderTreeNode(node, depth, container) {
   Object.values(node.children).forEach(child => {
     const folderId = `xfolder_${Math.random().toString(36).slice(2)}`;
 
-    // Cabecera de carpeta (clickeable)
+    // Cabecera de carpeta
     const folderRow = document.createElement("div");
     folderRow.className = "xampp-folder-row";
     folderRow.style.paddingLeft = `${12 + indent}px`;
     folderRow.innerHTML = `
-      <i class="fas fa-chevron-right xampp-folder-arrow" id="arr_${folderId}"></i>
-      <i class="fas fa-folder xampp-folder-icon"></i>
-      <span class="xampp-folder-name">${child.name}</span>
+      <i class="fas fa-chevron-right xampp-folder-arrow" id="arr_${folderId}" style="cursor:pointer; padding: 4px 6px 4px 2px; margin: -4px -6px -4px -2px;"></i>
+      <i class="fas fa-folder xampp-folder-icon" style="pointer-events:none;"></i>
+      <span class="xampp-folder-name" style="cursor:pointer;">${child.name}</span>
     `;
 
     // Contenedor de hijos (colapsado por defecto)
@@ -1453,20 +1457,39 @@ function renderTreeNode(node, depth, container) {
     childContainer.className = "xampp-folder-children collapsed";
     childContainer.id = folderId;
 
-    folderRow.onclick = () => {
+    // Función interna para hacer toggle del árbol
+    function toggleFolder(e) {
+      e.stopPropagation();
       const isCollapsed = childContainer.classList.contains("collapsed");
       const arrow = document.getElementById(`arr_${folderId}`);
       if (isCollapsed) {
         childContainer.classList.remove("collapsed");
         if (arrow) arrow.classList.add("rotated");
-        // Cambiar ícono de carpeta a abierta
         folderRow.querySelector(".xampp-folder-icon").classList.replace("fa-folder", "fa-folder-open");
       } else {
         childContainer.classList.add("collapsed");
         if (arrow) arrow.classList.remove("rotated");
         folderRow.querySelector(".xampp-folder-icon").classList.replace("fa-folder-open", "fa-folder");
       }
-    };
+    }
+
+    // Click en la flecha → solo desplegar/colapsar
+    const arrowEl = folderRow.querySelector(".xampp-folder-arrow");
+    arrowEl.addEventListener("click", (e) => {
+      toggleFolder(e);
+    });
+
+    // Click en el nombre → seleccionar carpeta para analizar sus documentos
+    const nameEl = folderRow.querySelector(".xampp-folder-name");
+    nameEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      // Recopilar todos los documentos dentro de esta carpeta (recursivo)
+      const docsInFolder = collectDocsFromNode(child);
+      if (docsInFolder.length === 0) {
+        return;
+      }
+      selectXamppFolder(child.name, docsInFolder);
+    });
 
     container.appendChild(folderRow);
     container.appendChild(childContainer);
@@ -1493,6 +1516,100 @@ function renderTreeNode(node, depth, container) {
     fileRow.onclick = () => selectXamppDocument(doc);
     container.appendChild(fileRow);
   });
+}
+
+/**
+ * Recopila recursivamente todos los documentos dentro de un nodo del árbol.
+ */
+function collectDocsFromNode(node) {
+  let docs = [...node.docs];
+  Object.values(node.children).forEach(child => {
+    docs = docs.concat(collectDocsFromNode(child));
+  });
+  return docs;
+}
+
+/**
+ * Selecciona una carpeta completa de la BD para analizar todos sus documentos.
+ * Funciona igual que la pestaña "Carpeta de Documentos" pero con documentos de la BD.
+ */
+async function selectXamppFolder(folderName, docs) {
+  const pdfStatus = document.getElementById("pdfStatus");
+  if (pdfStatus) pdfStatus.style.display = "none";
+  const folderStatus = document.getElementById("folderStatus");
+  if (folderStatus) folderStatus.style.display = "none";
+
+  // Cambiar a pestaña carpeta y mostrar vista de resultados
+  currentTab = "folder";
+  showResultsView();
+
+  const chatHistory = document.getElementById("chatHistory");
+  if (chatHistory) {
+    chatHistory.innerHTML = `
+      <div class="chat-bubble assistant">
+        <div class="bubble-icon bot-icon"><i class="fas fa-robot"></i></div>
+        <div class="bubble-text">
+          <div class="ai-typing" style="display:flex;"><span></span><span></span><span></span></div>
+          <span style="color:#70757a; font-size:13px;">Cargando carpeta <strong>${folderName}</strong> (${docs.length} documentos) desde la BD...</span>
+        </div>
+      </div>
+    `;
+  }
+
+  try {
+    const fd = new FormData();
+    fd.append("folder_name", folderName);
+    docs.forEach(doc => fd.append("paths", doc.relative_path));
+
+    const res = await fetch(`${API}/index_xampp_folder/`, { method: "POST", body: fd });
+    const data = await res.json();
+
+    if (!res.ok || !data.conversation_id) {
+      if (chatHistory) {
+        chatHistory.innerHTML = `
+          <div class="chat-bubble assistant">
+            <div class="bubble-icon bot-icon"><i class="fas fa-robot"></i></div>
+            <div class="bubble-text" style="color:#c5221f;">
+              ❌ Error al cargar la carpeta: ${data.error || "Error desconocido"}
+            </div>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    activeConversationId = data.conversation_id;
+    folderReady = true;
+    chatMessages["folder"] = [];
+
+    await fetchConversations();
+
+    if (chatHistory) {
+      chatHistory.innerHTML = `
+        <div class="chat-bubble assistant">
+          <div class="bubble-icon bot-icon"><i class="fas fa-robot"></i></div>
+          <div class="bubble-text">
+            ✅ Carpeta <strong>${folderName}</strong> cargada desde la Base de Datos (${docs.length} documentos). ¿En qué puedo ayudarte?
+          </div>
+        </div>
+      `;
+    }
+
+    renderSidebar();
+    scrollToBottom();
+
+  } catch(err) {
+    if (chatHistory) {
+      chatHistory.innerHTML = `
+        <div class="chat-bubble assistant">
+          <div class="bubble-icon bot-icon"><i class="fas fa-robot"></i></div>
+          <div class="bubble-text" style="color:#c5221f;">
+            ❌ Error de conexión con la API: ${err.message}
+          </div>
+        </div>
+      `;
+    }
+  }
 }
 
 function renderXamppDocuments() {
