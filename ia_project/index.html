@@ -1219,7 +1219,7 @@
 </div>
 
 <script>
-const API = "https://recovered-networking-racing-dan.trycloudflare.com";
+const API = "https://coordinates-traveler-controller-supporting.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1414,20 +1414,31 @@ async function loadXamppDocuments() {
  * Cada nodo es: { name, children: {}, docs: [] }
  */
 function buildFolderTree(docs) {
-  const root = { children: {}, docs: [] };
+  const root = { name: "", path: "", children: {}, docs: [] };
+
   docs.forEach(doc => {
     const parts = doc.relative_path.replace(/\\/g, "/").split("/");
     let node = root;
-    // Si el archivo está en la raíz (sin carpeta) solo hay 1 parte
+    let currentPath = "";
+
     for (let i = 0; i < parts.length - 1; i++) {
       const folder = parts[i];
+      currentPath = currentPath ? `${currentPath}/${folder}` : folder;
+
       if (!node.children[folder]) {
-        node.children[folder] = { name: folder, children: {}, docs: [] };
+        node.children[folder] = {
+          name: folder,
+          path: currentPath,
+          children: {},
+          docs: []
+        };
       }
       node = node.children[folder];
     }
+
     node.docs.push(doc);
   });
+
   return root;
 }
 
@@ -1488,7 +1499,7 @@ function renderTreeNode(node, depth, container) {
       if (docsInFolder.length === 0) {
         return;
       }
-      selectXamppFolder(child.name, docsInFolder);
+      selectXamppFolder(child.path, child.name, docsInFolder);
     });
 
     container.appendChild(folderRow);
@@ -1533,7 +1544,7 @@ function collectDocsFromNode(node) {
  * Selecciona una carpeta completa de la BD para analizar todos sus documentos.
  * Funciona igual que la pestaña "Carpeta de Documentos" pero con documentos de la BD.
  */
-async function selectXamppFolder(folderName, docs) {
+async function selectXamppFolder(folderPath, folderName, docs) {
   const pdfStatus = document.getElementById("pdfStatus");
   if (pdfStatus) pdfStatus.style.display = "none";
   const folderStatus = document.getElementById("folderStatus");
@@ -1558,6 +1569,7 @@ async function selectXamppFolder(folderName, docs) {
 
   try {
     const fd = new FormData();
+    fd.append("folder_path", folderPath);
     fd.append("folder_name", folderName);
     docs.forEach(doc => fd.append("paths", doc.relative_path));
 
