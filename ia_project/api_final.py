@@ -222,8 +222,8 @@ if not GROQ_API_KEY:
 # =======================================
 # CONFIGURACIÓN DE MODELOS Y RUTAS PERSISTENTES
 # =======================================
-VISION_MODEL = "llama-3.2-11b-vision-instruct"
-TEXT_MODEL   = "llama-3.3-70b-versatile"
+VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"   # Soporta visión + texto técnico complejo
+TEXT_MODEL   = "meta-llama/llama-4-scout-17b-16e-instruct"   # Mismo modelo: rápido, preciso y multimodal
 
 MAX_DOCUMENTS       = 150
 UPLOAD_DIR          = "uploaded_pdfs"
@@ -704,74 +704,82 @@ def get_docs_in_xampp_folder(folder_path: str):
 
 @app.post("/index_xampp_folder/")
 async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Form(...)):
-    meta = load_metadata()
+    try:
+        meta = load_metadata()
 
-    folder_path = folder_path.replace("\\", "/").strip("/")
-    existing = next(
-        (
-            cid for cid, data in meta.items()
-            if data.get("type") == "xampp_folder" and data.get("folder_path") == folder_path
-        ),
-        None
-    )
+        folder_path = folder_path.replace("\\", "/").strip("/")
+        existing = next(
+            (
+                cid for cid, data in meta.items()
+                if data.get("type") == "xampp_folder" and data.get("folder_path") == folder_path
+            ),
+            None
+        )
 
-    if existing and os.path.exists(os.path.join(INDICES_BASE_DIR, existing)):
+        if existing and os.path.exists(os.path.join(INDICES_BASE_DIR, existing)):
+            return {
+                "conversation_id": existing,
+                "message": "✅ Carpeta ya pre-leída — lista para preguntar"
+            }
+
+        docs_in_folder = get_docs_in_xampp_folder(folder_path)
+        if not docs_in_folder:
+            return JSONResponse(status_code=404, content={"error": "No se encontraron documentos en esa carpeta."})
+
+        all_documents = []
+        loop = asyncio.get_event_loop()
+
+        for doc in docs_in_folder:
+            full_path = doc["full_path"]
+            ext = os.path.splitext(full_path)[1].lower()
+
+            if ext == ".pdf":
+                raw_docs = await loop.run_in_executor(_executor, partial(extract_pdf_parallel, full_path))
+            elif ext == ".txt":
+                with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                raw_docs = [Document(page_content=content, metadata={"source": full_path, "page": 1})]
+            else:
+                continue
+
+            all_documents.extend(raw_docs)
+
+        if not all_documents:
+            return JSONResponse(status_code=400, content={"error": "No se pudo extraer texto de la carpeta."})
+
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
+        docs = splitter.split_documents(all_documents)
+
+        conv_id = f"xamppfolder_{uuid.uuid4().hex[:8]}"
+        conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
+        os.makedirs(conv_dir, exist_ok=True)
+
+        db = FAISS.from_documents(docs, embeddings)
+        db.save_local(conv_dir)
+
+        meta[conv_id] = {
+            "id": conv_id,
+            "title": f"Carpeta: {folder_name}",
+            "type": "xampp_folder",
+            "target_name": f"{folder_name} ({len(docs_in_folder)} archivos)",
+            "file_path": conv_dir,
+            "folder_path": folder_path,
+            "history": [],
+            "created_at": datetime.now().isoformat()
+        }
+        save_metadata(meta)
+
+        print(f"✅ Carpeta XAMPP indexada. ID: {conv_id} — {len(docs_in_folder)} archivos, {len(docs)} chunks")
         return {
-            "conversation_id": existing,
-            "message": "✅ Carpeta ya pre-leída — lista para preguntar"
+            "conversation_id": conv_id,
+            "message": "✅ Carpeta pre-leída e indexada correctamente"
         }
 
-    docs_in_folder = get_docs_in_xampp_folder(folder_path)
-    if not docs_in_folder:
-        return JSONResponse(status_code=404, content={"error": "No se encontraron documentos en esa carpeta."})
-
-    all_documents = []
-    loop = asyncio.get_event_loop()
-
-    for doc in docs_in_folder:
-        full_path = doc["full_path"]
-        ext = os.path.splitext(full_path)[1].lower()
-
-        if ext == ".pdf":
-            raw_docs = await loop.run_in_executor(_executor, partial(extract_pdf_parallel, full_path))
-        elif ext == ".txt":
-            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            raw_docs = [Document(page_content=content, metadata={"source": full_path, "page": 1})]
-        else:
-            continue
-
-        all_documents.extend(raw_docs)
-
-    if not all_documents:
-        return JSONResponse(status_code=400, content={"error": "No se pudo extraer texto de la carpeta."})
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
-    docs = splitter.split_documents(all_documents)
-
-    conv_id = f"xamppfolder_{uuid.uuid4().hex[:8]}"
-    conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
-    os.makedirs(conv_dir, exist_ok=True)
-
-    db = FAISS.from_documents(docs, embeddings)
-    db.save_local(conv_dir)
-
-    meta[conv_id] = {
-        "id": conv_id,
-        "title": f"Carpeta: {folder_name}",
-        "type": "xampp_folder",
-        "target_name": f"{folder_name} ({len(docs_in_folder)} archivos)",
-        "file_path": conv_dir,
-        "folder_path": folder_path,
-        "history": [],
-        "created_at": datetime.now().isoformat()
-    }
-    save_metadata(meta)
-
-    return {
-        "conversation_id": conv_id,
-        "message": "✅ Carpeta pre-leída e indexada correctamente"
-    }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"❌ Error al indexar carpeta XAMPP '{folder_path}': {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 # =======================================
 # ENDPOINTS DE CONVERSACIÓN
