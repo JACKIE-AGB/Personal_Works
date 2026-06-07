@@ -571,6 +571,23 @@ async def xampp_documents():
         "documents": docs
     }
 
+@app.get("/preindex_ready/")
+async def preindex_ready():
+    """
+    Endpoint liviano para que el frontend sepa si todos los documentos de la BD
+    ya están pre-indexados y listos para responder sin espera.
+    """
+    total_docs = len(scan_xampp_documents())
+    indexed    = len(PREINDEX_MAP)
+    ready      = PREINDEX_STATUS["done"] or (not PREINDEX_STATUS["running"] and indexed > 0)
+    return {
+        "ready":   ready,
+        "indexed": indexed,
+        "total":   total_docs,
+        "pending": max(0, total_docs - indexed)
+    }
+
+
 @app.get("/preindex_status/")
 async def preindex_status():
     """Devuelve el estado actual de la pre-indexación al arranque."""
@@ -589,8 +606,128 @@ async def preindex_status():
 # (usa el índice pre-generado si ya está listo)
 # =======================================
 
+# =======================================
+# ENDPOINT: SELECCIÓN INSTANTÁNEA DE DOCUMENTO BD
+# Resuelve el "Failed to fetch" — nunca llama a Apache/XAMPP al seleccionar
+# =======================================
+@app.post("/select_xampp_document/")
+async def select_xampp_document(path: str = Form(...)):
+    """
+    Selección instantánea de un documento de la BD.
+    1) Si ya está pre-indexado → devuelve conversation_id de inmediato.
+    2) Si aún no está listo → indexa on-demand y devuelve el ID.
+    En ningún caso intenta conectarse a Apache/XAMPP al momento de seleccionar.
+    """
+    # Normalizar path
+    path = path.replace("\\", "/").strip("/")
+
+    # ── Caso 1: ya pre-indexado ──
+    if path in PREINDEX_MAP:
+        conv_id = PREINDEX_MAP[path]
+        meta = load_metadata()
+        conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
+        if conv_id in meta and os.path.exists(conv_dir):
+            print(f"⚡ Selección instantánea: {path} → {conv_id}")
+            return {
+                "conversation_id": conv_id,
+                "ready": True,
+                "message": "✅ Documento listo para preguntar"
+            }
+        # Índice huérfano — limpiar y re-indexar
+        PREINDEX_MAP.pop(path, None)
+
+    # ── Caso 2: indexar on-demand ──
+    full_path = os.path.join(XAMPP_DOCS_PATH, path)
+    if not os.path.exists(full_path):
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"Documento no encontrado en la BD: {path}"}
+        )
+
+    try:
+        ext = os.path.splitext(full_path)[1].lower()
+        loop = asyncio.get_event_loop()
+
+        if ext == ".pdf":
+            raw_docs = await loop.run_in_executor(_executor, partial(extract_pdf_parallel, full_path))
+        elif ext == ".txt":
+            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            raw_docs = [Document(page_content=content, metadata={"source": full_path, "page": 1})]
+        else:
+            return JSONResponse(status_code=400, content={"error": "Formato no soportado"})
+
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
+        docs = splitter.split_documents(raw_docs)
+
+        conv_id  = f"xampp_{uuid.uuid4().hex[:8]}"
+        conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
+        vectorstore = FAISS.from_documents(docs, embeddings)
+        vectorstore.save_local(conv_dir)
+
+        file_name = os.path.basename(full_path)
+        meta = load_metadata()
+        meta[conv_id] = {
+            "id":            conv_id,
+            "title":         file_name,
+            "type":          "xampp",
+            "target_name":   file_name,
+            "file_path":     full_path,
+            "relative_path": path,
+            "history":       [],
+            "created_at":    datetime.now().isoformat()
+        }
+        save_metadata(meta)
+
+        PREINDEX_MAP[path] = conv_id
+        pmap = load_preindex_map()
+        pmap[path] = conv_id
+        save_preindex_map(pmap)
+
+        print(f"✅ Indexado on-demand: {file_name} → {conv_id}")
+        return {
+            "conversation_id": conv_id,
+            "ready": True,
+            "message": "✅ Documento indexado y listo para preguntar"
+        }
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+# =======================================
+# ENDPOINT: SELECCIÓN INSTANTÁNEA DE CARPETA BD
+# =======================================
+@app.post("/select_xampp_folder/")
+async def select_xampp_folder(folder_path: str = Form(...), folder_name: str = Form(...)):
+    """
+    Selección instantánea de una carpeta de la BD.
+    Reutiliza índices pre-existentes mediante fusión FAISS sin releer PDFs.
+    """
+    folder_path = folder_path.replace("\\", "/").strip("/")
+
+    meta = load_metadata()
+
+    # ── Atajo 1: carpeta ya indexada como unidad ──
+    existing = next(
+        (cid for cid, data in meta.items()
+         if data.get("type") == "xampp_folder" and data.get("folder_path") == folder_path),
+        None
+    )
+    if existing and os.path.exists(os.path.join(INDICES_BASE_DIR, existing)):
+        return {"conversation_id": existing, "ready": True, "message": "✅ Carpeta lista para preguntar"}
+
+    # ── Delegar a index_xampp_folder (que ahora usa PREINDEX_MAP internamente) ──
+    # Crear un Form object simulado no es necesario — llamamos la lógica directamente
+    from fastapi import Request
+    return await index_xampp_folder(folder_path=folder_path, folder_name=folder_name)
+
+
 @app.post("/index_xampp_document/")
 async def index_xampp_document(path: str = Form(...)):
+
+    # Normalizar path (consistencia con select_xampp_document)
+    path = path.replace("\\", "/").strip("/")
 
     # ── Atajo: si ya fue pre-indexado, devolver el ID directamente ──
     if path in PREINDEX_MAP:
@@ -708,6 +845,8 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
         meta = load_metadata()
 
         folder_path = folder_path.replace("\\", "/").strip("/")
+
+        # ── Atajo 1: carpeta ya fue indexada antes como unidad ──
         existing = next(
             (
                 cid for cid, data in meta.items()
@@ -715,8 +854,8 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
             ),
             None
         )
-
         if existing and os.path.exists(os.path.join(INDICES_BASE_DIR, existing)):
+            print(f"⚡ Carpeta ya indexada — devolviendo ID directo: {existing}")
             return {
                 "conversation_id": existing,
                 "message": "✅ Carpeta ya pre-leída — lista para preguntar"
@@ -726,36 +865,92 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
         if not docs_in_folder:
             return JSONResponse(status_code=404, content={"error": "No se encontraron documentos en esa carpeta."})
 
-        all_documents = []
-        loop = asyncio.get_event_loop()
-
+        # ── Atajo 2: TODOS los documentos ya están pre-indexados individualmente ──
+        # Fusionar los índices FAISS en memoria sin leer un solo PDF
+        preindexed_ids = []
+        pending_docs   = []
         for doc in docs_in_folder:
-            full_path = doc["full_path"]
-            ext = os.path.splitext(full_path)[1].lower()
-
-            if ext == ".pdf":
-                raw_docs = await loop.run_in_executor(_executor, partial(extract_pdf_parallel, full_path))
-            elif ext == ".txt":
-                with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
-                raw_docs = [Document(page_content=content, metadata={"source": full_path, "page": 1})]
+            rel = doc["relative_path"]
+            if rel in PREINDEX_MAP:
+                cid = PREINDEX_MAP[rel]
+                cdir = os.path.join(INDICES_BASE_DIR, cid)
+                if cid in meta and os.path.exists(cdir):
+                    preindexed_ids.append((cid, cdir))
+                else:
+                    pending_docs.append(doc)
             else:
-                continue
+                pending_docs.append(doc)
 
-            all_documents.extend(raw_docs)
-
-        if not all_documents:
-            return JSONResponse(status_code=400, content={"error": "No se pudo extraer texto de la carpeta."})
-
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
-        docs = splitter.split_documents(all_documents)
-
-        conv_id = f"xamppfolder_{uuid.uuid4().hex[:8]}"
+        conv_id  = f"xamppfolder_{uuid.uuid4().hex[:8]}"
         conv_dir = os.path.join(INDICES_BASE_DIR, conv_id)
         os.makedirs(conv_dir, exist_ok=True)
 
-        db = FAISS.from_documents(docs, embeddings)
-        db.save_local(conv_dir)
+        if preindexed_ids and not pending_docs:
+            # ✅ Caso ideal: todos pre-indexados — fusión instantánea
+            print(f"⚡ Todos los {len(preindexed_ids)} docs ya pre-indexados — fusionando índices FAISS...")
+            base_cid, base_dir = preindexed_ids[0]
+            merged_store = await asyncio.get_event_loop().run_in_executor(
+                _executor,
+                partial(FAISS.load_local, base_dir, embeddings, allow_dangerous_deserialization=True)
+            )
+            for _, extra_dir in preindexed_ids[1:]:
+                extra_store = await asyncio.get_event_loop().run_in_executor(
+                    _executor,
+                    partial(FAISS.load_local, extra_dir, embeddings, allow_dangerous_deserialization=True)
+                )
+                merged_store.merge_from(extra_store)
+
+            merged_store.save_local(conv_dir)
+            docs_count = len(preindexed_ids)
+            chunks_count = 0   # no aplica en fusión
+
+        else:
+            # ⚙️ Caso mixto/nuevo: indexar los docs pendientes y fusionar con los ya listos
+            all_documents = []
+            loop = asyncio.get_event_loop()
+
+            # Cargar documentos pendientes (no pre-indexados)
+            for doc in pending_docs:
+                full_path = doc["full_path"]
+                ext = os.path.splitext(full_path)[1].lower()
+                if ext == ".pdf":
+                    raw_docs = await loop.run_in_executor(_executor, partial(extract_pdf_parallel, full_path))
+                elif ext == ".txt":
+                    with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                    raw_docs = [Document(page_content=content, metadata={"source": full_path, "page": 1})]
+                else:
+                    continue
+                all_documents.extend(raw_docs)
+
+            if not all_documents and not preindexed_ids:
+                return JSONResponse(status_code=400, content={"error": "No se pudo extraer texto de la carpeta."})
+
+            splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
+            docs_split = splitter.split_documents(all_documents) if all_documents else []
+
+            if docs_split:
+                db = FAISS.from_documents(docs_split, embeddings)
+            else:
+                # Solo había pre-indexados; cargar el primero como base
+                _, base_dir = preindexed_ids[0]
+                db = await asyncio.get_event_loop().run_in_executor(
+                    _executor,
+                    partial(FAISS.load_local, base_dir, embeddings, allow_dangerous_deserialization=True)
+                )
+                preindexed_ids = preindexed_ids[1:]
+
+            # Fusionar los ya pre-indexados que haya
+            for _, extra_dir in preindexed_ids:
+                extra_store = await asyncio.get_event_loop().run_in_executor(
+                    _executor,
+                    partial(FAISS.load_local, extra_dir, embeddings, allow_dangerous_deserialization=True)
+                )
+                db.merge_from(extra_store)
+
+            db.save_local(conv_dir)
+            docs_count   = len(docs_in_folder)
+            chunks_count = len(docs_split)
 
         meta[conv_id] = {
             "id": conv_id,
@@ -769,7 +964,7 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
         }
         save_metadata(meta)
 
-        print(f"✅ Carpeta XAMPP indexada. ID: {conv_id} — {len(docs_in_folder)} archivos, {len(docs)} chunks")
+        print(f"✅ Carpeta XAMPP lista. ID: {conv_id} — {len(docs_in_folder)} archivos")
         return {
             "conversation_id": conv_id,
             "message": "✅ Carpeta pre-leída e indexada correctamente"
