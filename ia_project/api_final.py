@@ -73,7 +73,7 @@ def _preindex_single_document(doc: dict) -> tuple[str, str | None]:
         if not raw_docs:
             return rel_path, None
 
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         docs     = splitter.split_documents(raw_docs)
 
         conv_id  = f"xampp_{uuid.uuid4().hex[:8]}"
@@ -252,6 +252,9 @@ GROQ_CONCURRENCY = 6
 
 CANCELLATION_TOKENS = {}
 
+# ── Caché de índices FAISS en memoria (evita load_local en cada consulta) ──
+_FAISS_CACHE: dict[str, object] = {}
+
 def load_preindex_map() -> dict:
     """Carga el mapa de pre-indexación persistente desde disco."""
     if os.path.exists(PREINDEX_MAP_FILE):
@@ -336,6 +339,7 @@ def delete_conversation_files(conversation_id: str):
     if os.path.exists(conv_dir):
         try:
             shutil.rmtree(conv_dir)
+            _FAISS_CACHE.pop(conv_dir, None)   # invalidar caché
             print(f"🧹 Limpiados archivos de conversación: {conversation_id}")
         except Exception as e:
             print(f"⚠️ Error limpiando {conversation_id}: {e}")
@@ -453,7 +457,7 @@ def _extract_pages_data(file_path: str, cancel_token: str = None) -> list[dict]:
 
             img_b64 = None
             if needs_vision:
-                pix = page.get_pixmap(dpi=100)
+                pix = page.get_pixmap(dpi=72)
                 img_b64 = base64.b64encode(pix.tobytes("png")).decode("utf-8")
 
             pages_data.append({
@@ -480,7 +484,7 @@ def _analyze_page(page_data: dict, cancel_token: str = None) -> Document:
         try:
             llm = ChatGroq(model=VISION_MODEL, api_key=GROQ_API_KEY, temperature=0.0)
             msg = HumanMessage(content=[
-                {"type": "text", "text": "Eres un ingeniero especialista de la CFE. Analiza minuciosamente este plano técnico, diagrama, mapa o documento escaneado. Describe equipos, tuberías, conexiones eléctricas, valores numéricos, nomenclaturas, leyendas y datos críticos de forma técnica y concisa para que sea indexable textualmente."},
+                {"type": "text", "text": "Eres ingeniero CFE. Describe técnicamente: equipos, conexiones, valores numéricos, nomenclaturas. Sé conciso."},
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{page_data['img_b64']}"}}
             ])
             response = llm.invoke([msg])
@@ -781,7 +785,7 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
                 new_documents.append(Document(page_content=content, metadata={"source": full_path, "page": 1}))
         
         # Dividir documentos nuevos
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         new_chunks = splitter.split_documents(new_documents) if new_documents else []
         
         def _build_mixed_index():
@@ -919,8 +923,8 @@ async def index_xampp_document(path: str = Form(...)):
             )
 
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1500,
-            chunk_overlap=200
+            chunk_size=1000,
+            chunk_overlap=100
         )
 
         docs = splitter.split_documents(raw_docs)
@@ -1066,7 +1070,7 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
             if not all_documents and not preindexed_ids:
                 return JSONResponse(status_code=400, content={"error": "No se pudo extraer texto de la carpeta."})
 
-            splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
+            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
             docs_split = splitter.split_documents(all_documents) if all_documents else []
 
             if docs_split:
@@ -1189,7 +1193,7 @@ async def upload_pdf(file: UploadFile = File(...), cancel_token: str = Form(None
                 os.remove(file_path)
             return JSONResponse(status_code=499, content={"error": "Lectura de PDF cancelada por el usuario."})
 
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         docs = splitter.split_documents(raw_docs)
 
         meta = load_metadata()
@@ -1366,6 +1370,51 @@ async def upload_folder_remote(files: List[UploadFile] = File(...), cancel_token
         if cancel_token in CANCELLATION_TOKENS:
             del CANCELLATION_TOKENS[cancel_token]
 
+# ── Helper: carga FAISS con caché en memoria ──────────────────────────────────
+def _get_faiss_store(conv_dir: str):
+    """Devuelve el vectorstore desde caché o lo carga desde disco."""
+    if conv_dir not in _FAISS_CACHE:
+        _FAISS_CACHE[conv_dir] = FAISS.load_local(
+            conv_dir, embeddings, allow_dangerous_deserialization=True
+        )
+    return _FAISS_CACHE[conv_dir]
+
+# ── Helper: actualiza historial limitando a MAX_HISTORY_PAIRS pares ───────────
+MAX_HISTORY_PAIRS = 10   # máximo de pares user/assistant guardados por conversación
+
+def _append_history(meta: dict, conv_id: str, question: str, answer: str, sources: list):
+    history = meta[conv_id].get("history", [])
+    history.append({"role": "user", "content": question})
+    history.append({"role": "assistant", "content": answer, "sources": sources})
+    # Mantener solo los últimos N pares para evitar que el JSON crezca indefinidamente
+    if len(history) > MAX_HISTORY_PAIRS * 2:
+        history = history[-(MAX_HISTORY_PAIRS * 2):]
+    meta[conv_id]["history"] = history
+
+# ── Prompts compactos compartidos ─────────────────────────────────────────────
+_STYLE_PERSONA = {
+    "normal":   "Analista CFE. Responde profesionalmente según el contexto.",
+    "amable":   "Analista CFE. Responde de forma amable y detallada.",
+    "agresivo": "Analista CFE. Responde directo, técnico, sin rodeos.",
+}
+
+_TEMPLATE_PDF = """{persona}
+Usa SOLO el contexto. Si no hay info suficiente, dilo.
+
+Contexto:
+{context}
+
+Pregunta: {question}
+Respuesta:"""
+
+_TEMPLATE_FOLDER = """Ingeniero Analista CFE. Responde de forma técnica y precisa usando el contexto.
+
+Contexto:
+{context}
+
+Pregunta: {question}
+Respuesta:"""
+
 # =======================================
 # ENDPOINTS: CONSULTAS RAG
 # =======================================
@@ -1377,33 +1426,17 @@ async def ask_pdf(question: str = Form(...), style: str = Form("normal"), conver
 
     conv_dir = os.path.join(INDICES_BASE_DIR, conversation_id)
     try:
-        local_store = FAISS.load_local(conv_dir, embeddings, allow_dangerous_deserialization=True)
+        local_store = _get_faiss_store(conv_dir)
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": f"Error al cargar el índice: {e}"})
 
-    style_map = {
-        "normal": "Eres un analista documental experto de CFE. Responde de forma profesional basándote en el texto y planos analizados.",
-        "amable": "Eres un analista documental experto de CFE. Responde de manera amable, cordial y altamente detallada.",
-        "agresivo": "Eres un analista documental experto de CFE. Responde de forma directa, técnica, concisa y sin rodeos.",
-    }
-    persona = style_map.get(style, style_map["normal"])
-
-    template = f"""{persona}
-Responde ÚNICAMENTE usando el contexto proporcionado.
-Si no encuentras información suficiente, indica claramente que no existe en el documento.
-
-Contexto:
-{{context}}
-
-Pregunta:
-{{question}}
-
-Respuesta:"""
-
+    persona = _STYLE_PERSONA.get(style, _STYLE_PERSONA["normal"])
+    template = _TEMPLATE_PDF.replace("{persona}", persona)
     prompt = PromptTemplate(template=template, input_variables=["context", "question"])
+
     chain = RetrievalQA.from_chain_type(
         llm=ChatGroq(model=TEXT_MODEL, api_key=GROQ_API_KEY, temperature=0.2),
-        retriever=local_store.as_retriever(search_type="mmr", search_kwargs={"k": 5}),
+        retriever=local_store.as_retriever(search_type="mmr", search_kwargs={"k": 4}),
         return_source_documents=True,
         chain_type_kwargs={"prompt": prompt},
     )
@@ -1412,10 +1445,9 @@ Respuesta:"""
     result = await loop.run_in_executor(_executor, partial(chain.invoke, {"query": question}))
     sources = sorted(set(d.metadata["source"] for d in result["source_documents"]))
 
-    meta[conversation_id]["history"].append({"role": "user", "content": question})
-    meta[conversation_id]["history"].append({"role": "assistant", "content": result["result"], "sources": sources})
+    _append_history(meta, conversation_id, question, result["result"], sources)
     save_metadata(meta)
-    
+
     sessions = load_temp_sessions()
     if conversation_id in sessions:
         sessions[conversation_id]["last_accessed"] = datetime.now().isoformat()
@@ -1431,26 +1463,14 @@ async def ask_folder(question: str = Form(...), conversation_id: str = Form(...)
 
     conv_dir = os.path.join(INDICES_BASE_DIR, conversation_id)
     try:
-        local_store = FAISS.load_local(conv_dir, embeddings, allow_dangerous_deserialization=True)
+        local_store = _get_faiss_store(conv_dir)
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": f"Error al cargar el índice: {e}"})
 
-    template = """Eres un Ingeniero Analista del Sistema de Información CFE El Cajón.
-Usa los fragmentos de contexto (texto e interpretaciones de planos por visión) para responder
-de forma técnica, factual y sumamente precisa.
-
-Contexto:
-{context}
-
-Pregunta:
-{question}
-
-Respuesta:"""
-
-    prompt = PromptTemplate(template=template, input_variables=["context", "question"])
+    prompt = PromptTemplate(template=_TEMPLATE_FOLDER, input_variables=["context", "question"])
     chain = RetrievalQA.from_chain_type(
         llm=ChatGroq(model=TEXT_MODEL, api_key=GROQ_API_KEY, temperature=0.0),
-        retriever=local_store.as_retriever(search_type="mmr", search_kwargs={"k": 8}),
+        retriever=local_store.as_retriever(search_type="mmr", search_kwargs={"k": 5}),
         return_source_documents=True,
         chain_type_kwargs={"prompt": prompt},
     )
@@ -1459,10 +1479,9 @@ Respuesta:"""
     result = await loop.run_in_executor(_executor, partial(chain.invoke, {"query": question}))
     sources = sorted(set(d.metadata["source"] for d in result["source_documents"]))
 
-    meta[conversation_id]["history"].append({"role": "user", "content": question})
-    meta[conversation_id]["history"].append({"role": "assistant", "content": result["result"], "sources": sources})
+    _append_history(meta, conversation_id, question, result["result"], sources)
     save_metadata(meta)
-    
+
     sessions = load_temp_sessions()
     if conversation_id in sessions:
         sessions[conversation_id]["last_accessed"] = datetime.now().isoformat()
@@ -1496,6 +1515,7 @@ async def clear_index():
     os.makedirs(INDICES_BASE_DIR, exist_ok=True)
     save_temp_sessions({})
     PREINDEX_MAP.clear()   # limpiar también el mapa en memoria
+    _FAISS_CACHE.clear()   # limpiar caché de índices en memoria
     return {"message": "✅ Índices de memoria, disco y archivos cargados eliminados."}
 
 @app.post("/clear_all_sessions/")
