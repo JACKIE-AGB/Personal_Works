@@ -33,13 +33,13 @@
     .sidebar {
       width: 280px;
       min-width: 280px;
-      background-color: #131314;
-      color: #e3e3e3;
+      background-color: #ffffff;
+      color: #1a1a1a;
       display: flex;
       flex-direction: column;
       padding: 16px 12px;
       box-sizing: border-box;
-      border-right: 1px solid #303134;
+      border-right: 1px solid #dde1e5;
       flex-shrink: 0;
       overflow-y: auto;
       overflow-x: hidden;
@@ -59,7 +59,7 @@
       font-weight: 500;
       margin-bottom: 20px;
       padding-left: 8px;
-      color: #ffffff;
+      color: #1a1a1a;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -74,8 +74,8 @@
     }
 
     .new-chat-btn {
-      background: #1e1e1f;
-      color: #e3e3e3;
+      background: #f1f3f4;
+      color: #1a1a1a;
       border: none;
       padding: 12px 16px;
       border-radius: 24px;
@@ -90,7 +90,7 @@
       transition: background 0.2s;
       white-space: nowrap;
     }
-    .new-chat-btn:hover { background: #2b2b2c; }
+    .new-chat-btn:hover { background: #e2e5e9; }
 
     .sidebar-menu-item {
       padding: 10px 12px;
@@ -100,20 +100,20 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      color: #c4c7c5;
+      color: #3c4043;
       margin-bottom: 4px;
       white-space: nowrap;
     }
     .sidebar-menu-item:hover {
-      background: #1e1e1f;
-      color: #ffffff;
+      background: #f1f3f4;
+      color: #1a1a1a;
     }
 
     .sidebar-section-title {
       font-size: 12px;
       font-weight: 600;
       text-transform: uppercase;
-      color: #7c7f82;
+      color: #80868b;
       margin: 20px 0 10px 8px;
       letter-spacing: 0.5px;
       white-space: nowrap;
@@ -136,11 +136,11 @@
       gap: 4px;
     }
     .history-card:hover,
-    .history-card.active { background: #1e1e1f; }
+    .history-card.active { background: #f1f3f4; }
 
     .history-card-title {
       font-size: 14px;
-      color: #e3e3e3;
+      color: #1a1a1a;
       font-weight: 500;
       white-space: nowrap;
       overflow: hidden;
@@ -183,7 +183,7 @@
       transition: background 0.2s, color 0.2s;
     }
     .conv-actions-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(0, 0, 0, 0.08);
       color: #ff4d4d;
     }
 
@@ -1092,8 +1092,6 @@
 <div class="xampp-dropdown collapsed" id="xamppDropdown">
   <div class="history-list" id="xamppDocumentsList"></div>
 </div>
-    <div class="sidebar-menu-item"><i class="fas fa-book-bookmark"></i> Biblioteca</div>
-
     <div class="sidebar-section-title">Conversaciones</div>
 
     <div class="history-list" id="sidebarHistoryList"></div>
