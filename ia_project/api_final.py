@@ -82,26 +82,29 @@ def _preindex_single_document(doc: dict) -> tuple[str, str | None]:
         vectorstore = FAISS.from_documents(docs, embeddings)
         vectorstore.save_local(conv_dir)
 
-        meta = load_metadata()
-        meta[conv_id] = {
-            "id":          conv_id,
-            "title":       file_name,
-            "type":        "xampp",
-            "target_name": file_name,
-            "file_path":   full_path,
-            "file_path_bd": conv_dir,   # ruta real del índice en bd_indices/
-            "relative_path": rel_path,
-            "history":     [],
-            "created_at":  datetime.now().isoformat()
-        }
-        save_metadata(meta)
-        # NO registrar como sesión temporal — es un índice permanente de la BD
+        # 👇 REEMPLAZA EL BLOQUE DE GUARDADO POR ESTE CÓDIGO CON LOCK 👇
+        with FILE_LOCK:
+            meta = load_metadata()
+            meta[conv_id] = {
+                "id":          conv_id,
+                "title":       file_name,
+                "type":        "xampp",
+                "target_name": file_name,
+                "file_path":   full_path,
+                "file_path_bd": conv_dir,
+                "relative_path": rel_path,
+                "history":     [],
+                "created_at":  datetime.now().isoformat()
+            }
+            save_metadata(meta)
+            # NO registrar como sesión temporal — es un índice permanente de la BD
 
-        # Persistir en disco para sobrevivir reinicios (guardar fingerprint del archivo)
-        mtime, size = _get_file_fingerprint(full_path)
-        pmap = load_preindex_map()
-        pmap[rel_path] = {"conv_id": conv_id, "mtime": mtime, "size": size}
-        save_preindex_map(pmap)
+            # Persistir en disco para sobrevivir reinicios (guardar fingerprint del archivo)
+            mtime, size = _get_file_fingerprint(full_path)
+            pmap = load_preindex_map()
+            pmap[rel_path] = {"conv_id": conv_id, "mtime": mtime, "size": size}
+            save_preindex_map(pmap)
+        # 👆 FIN DEL CÓDIGO CORREGIDO 👆
 
         print(f"  ✅ Pre-indexado: {file_name}  →  {conv_id}")
         return rel_path, conv_id
@@ -143,7 +146,9 @@ def run_preindex():
         conv_dir = os.path.join(BD_INDICES_DIR, conv_id)
         full_path = os.path.join(XAMPP_DOCS_PATH, rel_path)
 
-        index_ok = conv_id in meta and os.path.exists(conv_dir)
+        # Dentro del ciclo "for rel_path, entry in persisted.items():"
+        # 👇 REEMPLAZA LA LÍNEA DE "index_ok" POR ESTA 👇
+        index_ok = conv_id in meta and os.path.exists(os.path.join(conv_dir, "index.faiss"))
         file_changed = _file_changed(rel_path, full_path, persisted)
 
         if index_ok and not file_changed:
@@ -291,6 +296,8 @@ GROQ_CONCURRENCY = 6
 
 CANCELLATION_TOKENS = {}
 
+FILE_LOCK = threading.Lock()
+
 # ── Caché de índices FAISS en memoria (evita load_local en cada consulta) ──
 _FAISS_CACHE: dict[str, object] = {}
 
@@ -353,10 +360,16 @@ def _file_changed(rel_path: str, full_path: str, pmap: dict) -> bool:
     if not entry:
         return True
     mtime, size = _get_file_fingerprint(full_path)
-    stored_mtime = entry.get("mtime", 0.0)
-    stored_size  = entry.get("size", 0)
+    stored_mtime = entry.get("mtime", 0.0) if isinstance(entry, dict) else 0.0
+    stored_size  = entry.get("size", 0)    if isinstance(entry, dict) else 0
     # Considerar cambiado si mtime o size difieren (tolerancia 2s para FAT32/NTFS)
     return abs(mtime - stored_mtime) > 2.0 or size != stored_size
+
+def _pmap_conv_id(value) -> str:
+    """Extrae el conv_id de una entrada del preindex_map, sea dict o string."""
+    if isinstance(value, dict):
+        return value["conv_id"]
+    return value   # formato legado: ya es un string
 
 def load_metadata() -> dict:
     if os.path.exists(METADATA_FILE):
@@ -723,7 +736,7 @@ async def select_xampp_document(path: str = Form(...)):
     
     # Caso 1: Ya está pre-indexado (RESPUESTA INMEDIATA)
     if path in PREINDEX_MAP:
-        conv_id = PREINDEX_MAP[path]
+        conv_id = _pmap_conv_id(PREINDEX_MAP[path])
         meta = load_metadata()
         conv_dir = os.path.join(BD_INDICES_DIR, conv_id)   # ← siempre en bd_indices/
         
@@ -767,9 +780,10 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
         meta = load_metadata()
         folder_path = folder_path.replace("\\", "/").strip("/")
         
-        # Sincronizar mapa de pre-indexación
+        # Sincronizar mapa de pre-indexación (extraer solo conv_id de cada entrada)
         pmap_disk = load_preindex_map()
-        PREINDEX_MAP.update(pmap_disk)
+        for _rel, _entry in pmap_disk.items():
+            PREINDEX_MAP[_rel] = _entry["conv_id"] if isinstance(_entry, dict) else _entry
         
         # Atajo 1: La carpeta completa ya fue indexada como unidad
         existing = next(
@@ -796,8 +810,9 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
         
         for doc in docs_in_folder:
             rel_path = doc["relative_path"]
-            if rel_path in PREINDEX_MAP:
-                conv_id = PREINDEX_MAP[rel_path]
+            raw = PREINDEX_MAP.get(rel_path)
+            if raw is not None:
+                conv_id = _pmap_conv_id(raw)
                 conv_dir = os.path.join(BD_INDICES_DIR, conv_id)   # ← bd_indices/
                 if conv_id in meta and os.path.exists(conv_dir):
                     preindexed_ids.append((conv_id, conv_dir))
@@ -944,7 +959,7 @@ async def check_document_ready(path: str):
     
     # Verificar en memoria
     if path in PREINDEX_MAP:
-        conv_id = PREINDEX_MAP[path]
+        conv_id = _pmap_conv_id(PREINDEX_MAP[path])
         meta = load_metadata()
         conv_dir = os.path.join(BD_INDICES_DIR, conv_id)   # ← bd_indices/
         
@@ -969,7 +984,7 @@ async def index_xampp_document(path: str = Form(...)):
 
     # ── Atajo: si ya fue pre-indexado, devolver el ID directamente ──
     if path in PREINDEX_MAP:
-        conv_id = PREINDEX_MAP[path]
+        conv_id = _pmap_conv_id(PREINDEX_MAP[path])
         meta    = load_metadata()
         if conv_id in meta:
             print(f"⚡ Usando índice pre-generado para: {path} → {conv_id}")
@@ -1111,9 +1126,10 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
         pending_docs   = []
         for doc in docs_in_folder:
             rel = doc["relative_path"]
-            if rel in PREINDEX_MAP:
-                cid = PREINDEX_MAP[rel]
-                cdir = os.path.join(INDICES_BASE_DIR, cid)
+            raw = PREINDEX_MAP.get(rel)
+            if raw is not None:
+                cid = raw["conv_id"] if isinstance(raw, dict) else raw   # ← seguro siempre
+                cdir = os.path.join(BD_INDICES_DIR, cid)
                 if cid in meta and os.path.exists(cdir):
                     preindexed_ids.append((cid, cdir))
                 else:
