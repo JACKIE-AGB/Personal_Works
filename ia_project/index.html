@@ -1217,7 +1217,7 @@
 </div>
 
 <script>
-const API = "https://investment-desktop-beings-fastest.trycloudflare.com";
+const API = "https://routes-counting-improve-diet.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -1548,7 +1548,7 @@ async function selectXamppFolder(folderPath, folderName, docs) {
   const folderStatus = document.getElementById("folderStatus");
   if (folderStatus) folderStatus.style.display = "none";
 
-  // Cambiar a pestaña carpeta y mostrar vista de resultados
+  // Cambiar a pestaña carpeta
   currentTab = "folder";
   showResultsView();
 
@@ -1566,15 +1566,23 @@ async function selectXamppFolder(folderPath, folderName, docs) {
   }
 
   try {
-    const fd = new FormData();
-    fd.append("folder_path", folderPath);
-    fd.append("folder_name", folderName);
-    docs.forEach(doc => fd.append("paths", doc.relative_path));
+    // 🔥 Enviar como JSON, no como FormData
+    const response = await fetch(`${API}/index_xampp_folder/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        folder_path: folderPath,
+        folder_name: folderName,
+        paths: docs.map(doc => doc.relative_path)
+      })
+    });
+    
+    const data = await response.json();
 
-    const res = await fetch(`${API}/index_xampp_folder/`, { method: "POST", body: fd });
-    const data = await res.json();
-
-    if (!res.ok || !data.conversation_id) {
+    if (!response.ok || !data.conversation_id) {
+      console.error("Error response:", data);
       if (chatHistory) {
         chatHistory.innerHTML = `
           <div class="chat-bubble assistant">
@@ -1609,6 +1617,7 @@ async function selectXamppFolder(folderPath, folderName, docs) {
     scrollToBottom();
 
   } catch(err) {
+    console.error("Fetch error:", err);
     if (chatHistory) {
       chatHistory.innerHTML = `
         <div class="chat-bubble assistant">

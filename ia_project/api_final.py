@@ -769,29 +769,38 @@ async def select_xampp_document(path: str = Form(...)):
 # =======================================
 # ENDPOINT: SELECCIÓN DE CARPETA BD (SIN RE-LEER PDFs)
 # =======================================
+from fastapi import Body
+
 @app.post("/index_xampp_folder/")
-async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Form(...)):
+async def index_xampp_folder(
+    data: dict = Body(...)  # ← Recibir JSON en lugar de Form
+):
     """
-    Indexa o recupera una carpeta de la BD.
-    ✅ Si TODOS los documentos están pre-indexados → solo fusiona índices (sin leer PDFs)
-    ✅ Si hay documentos nuevos → SOLO esos se procesan
+    Indexa o recupera una carpeta de la BD (incluye subcarpetas).
+    Recibe JSON con folder_path, folder_name y paths.
     """
     try:
-        meta = load_metadata()
-        folder_path = folder_path.replace("\\", "/").strip("/")
+        folder_path = data.get("folder_path", "").replace("\\", "/").strip("/")
+        folder_name = data.get("folder_name", "")
+        paths = data.get("paths", [])
         
-        # Sincronizar mapa de pre-indexación (extraer solo conv_id de cada entrada)
+        print(f"📁 Indexando carpeta: {folder_path}")
+        print(f"📄 Documentos recibidos: {len(paths)}")
+        
+        meta = load_metadata()
+        
+        # Sincronizar mapa de pre-indexación
         pmap_disk = load_preindex_map()
         for _rel, _entry in pmap_disk.items():
             PREINDEX_MAP[_rel] = _entry["conv_id"] if isinstance(_entry, dict) else _entry
         
         # Atajo 1: La carpeta completa ya fue indexada como unidad
         existing = next(
-            (cid for cid, data in meta.items()
-             if data.get("type") == "xampp_folder" and data.get("folder_path") == folder_path),
+            (cid for cid, conv_data in meta.items()
+             if conv_data.get("type") == "xampp_folder" and conv_data.get("folder_path") == folder_path),
             None
         )
-        if existing and os.path.exists(os.path.join(INDICES_BASE_DIR, existing)):
+        if existing and os.path.exists(os.path.join(BD_INDICES_DIR, existing)):
             print(f"⚡ Carpeta ya indexada como unidad: {existing}")
             return {
                 "conversation_id": existing,
@@ -799,57 +808,68 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
                 "message": "✅ Carpeta lista para preguntar"
             }
         
-        # Obtener documentos en la carpeta
-        docs_in_folder = get_docs_in_xampp_folder(folder_path)
+        # Construir lista de documentos a partir de los paths recibidos
+        docs_in_folder = []
+        for rel_path in paths:
+            rel_path = rel_path.replace("\\", "/").strip("/")
+            full_path = os.path.join(XAMPP_DOCS_PATH, rel_path)
+            if os.path.exists(full_path):
+                docs_in_folder.append({
+                    "name": os.path.basename(full_path),
+                    "relative_path": rel_path,
+                    "full_path": full_path,
+                    "type": "file",
+                    "url": f"{APACHE_BASE_URL}/{rel_path}"
+                })
+        
         if not docs_in_folder:
             return JSONResponse(status_code=404, content={"error": "No se encontraron documentos en la carpeta."})
         
+        print(f"📊 Documentos encontrados: {len(docs_in_folder)}")
+        
         # Clasificar documentos
-        preindexed_ids = []  # Documentos que YA tienen índice
-        missing_docs = []    # Documentos que faltan indexar
+        preindexed_ids = []
+        missing_docs = []
         
         for doc in docs_in_folder:
             rel_path = doc["relative_path"]
             raw = PREINDEX_MAP.get(rel_path)
             if raw is not None:
                 conv_id = _pmap_conv_id(raw)
-                conv_dir = os.path.join(BD_INDICES_DIR, conv_id)   # ← bd_indices/
+                conv_dir = os.path.join(BD_INDICES_DIR, conv_id)
                 if conv_id in meta and os.path.exists(conv_dir):
                     preindexed_ids.append((conv_id, conv_dir))
+                    print(f"  ✅ Pre-indexado: {rel_path}")
                 else:
                     missing_docs.append(doc)
+                    print(f"  ⚠️ Índice huérfano: {rel_path}")
             else:
                 missing_docs.append(doc)
+                print(f"  ❌ No indexado: {rel_path}")
         
-        # Si NO hay documentos faltantes → fusión RÁPIDA (sin leer PDFs)
+        print(f"📈 Pre-indexados: {len(preindexed_ids)}, Pendientes: {len(missing_docs)}")
+        
+        # Si NO hay documentos faltantes → fusión RÁPIDA
         if not missing_docs and preindexed_ids:
-            print(f"⚡ Fusión instantánea de {len(preindexed_ids)} índices (sin leer PDFs)")
+            print(f"⚡ Fusión instantánea de {len(preindexed_ids)} índices")
             
             conv_id = f"xamppfolder_{uuid.uuid4().hex[:8]}"
-            conv_dir = os.path.join(BD_INDICES_DIR, conv_id)   # ← carpeta fusionada en bd_indices/
+            conv_dir = os.path.join(BD_INDICES_DIR, conv_id)
             os.makedirs(conv_dir, exist_ok=True)
             
-            # Realizar fusión en hilo separado
             loop = asyncio.get_event_loop()
             
             def _merge_faiss_only():
-                # Cargar primer índice como base
                 base_id, base_dir = preindexed_ids[0]
                 merged = FAISS.load_local(base_dir, embeddings, allow_dangerous_deserialization=True)
-                
-                # Fusionar el resto
                 for _, extra_dir in preindexed_ids[1:]:
                     extra = FAISS.load_local(extra_dir, embeddings, allow_dangerous_deserialization=True)
                     merged.merge_from(extra)
-                
-                # Guardar índice fusionado
                 merged.save_local(conv_dir)
                 return len(preindexed_ids)
             
-            # Ejecutar fusión sin bloquear
             docs_count = await loop.run_in_executor(_executor, _merge_faiss_only)
             
-            # Guardar metadatos
             meta[conv_id] = {
                 "id": conv_id,
                 "title": f"Carpeta: {folder_name}",
@@ -862,7 +882,6 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
             }
             save_metadata(meta)
             
-            print(f"✅ Carpeta fusionada instantáneamente: {conv_id}")
             return {
                 "conversation_id": conv_id,
                 "ready": True,
@@ -870,10 +889,10 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
             }
         
         # Caso 2: Hay documentos faltantes - procesar SOLO los nuevos
-        print(f"⚠️ {len(missing_docs)} documentos faltantes de {len(docs_in_folder)} totales. Procesando solo los nuevos...")
+        print(f"⚠️ Procesando {len(missing_docs)} documentos faltantes...")
         
         conv_id = f"xamppfolder_{uuid.uuid4().hex[:8]}"
-        conv_dir = os.path.join(BD_INDICES_DIR, conv_id)   # ← bd_indices/
+        conv_dir = os.path.join(BD_INDICES_DIR, conv_id)
         os.makedirs(conv_dir, exist_ok=True)
         
         loop = asyncio.get_event_loop()
@@ -883,9 +902,9 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
         for doc in missing_docs:
             full_path = doc["full_path"]
             ext = os.path.splitext(full_path)[1].lower()
+            print(f"  📖 Procesando: {doc['name']}")
             
             if ext == ".pdf":
-                # Extraer PDF (esto es lento, pero inevitable para documentos nuevos)
                 raw_docs = await loop.run_in_executor(_executor, partial(extract_pdf_parallel, full_path))
                 new_documents.extend(raw_docs)
             elif ext == ".txt":
@@ -896,30 +915,30 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
         # Dividir documentos nuevos
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         new_chunks = splitter.split_documents(new_documents) if new_documents else []
+        print(f"📦 Chunks generados: {len(new_chunks)}")
         
         def _build_mixed_index():
-            # Crear índice base con los documentos nuevos
             if new_chunks:
                 db = FAISS.from_documents(new_chunks, embeddings)
+                print(f"  Base creada con {len(new_chunks)} chunks")
             elif preindexed_ids:
-                # Si no hay documentos nuevos pero hay pre-indexados (caso raro)
                 _, base_dir = preindexed_ids[0]
                 db = FAISS.load_local(base_dir, embeddings, allow_dangerous_deserialization=True)
                 preindexed_ids.pop(0)
+                print(f"  Base cargada desde índice existente")
             else:
                 raise Exception("No hay documentos para indexar")
             
-            # Fusionar documentos pre-indexados existentes
             for _, extra_dir in preindexed_ids:
                 extra_store = FAISS.load_local(extra_dir, embeddings, allow_dangerous_deserialization=True)
                 db.merge_from(extra_store)
+                print(f"  Fusionado índice adicional")
             
             db.save_local(conv_dir)
             return len(new_chunks), len(preindexed_ids)
         
-        new_chunks_count, preindexed_count = await loop.run_in_executor(_executor, _build_mixed_index)
+        await loop.run_in_executor(_executor, _build_mixed_index)
         
-        # Guardar metadatos
         meta[conv_id] = {
             "id": conv_id,
             "title": f"Carpeta: {folder_name}",
@@ -932,11 +951,12 @@ async def index_xampp_folder(folder_path: str = Form(...), folder_name: str = Fo
         }
         save_metadata(meta)
         
-        print(f"✅ Carpeta procesada: {len(docs_in_folder)} docs totales, {preindexed_count} pre-indexados, {len(missing_docs)} nuevos")
+        print(f"✅ Carpeta indexada correctamente: {conv_id}")
+        
         return {
             "conversation_id": conv_id,
             "ready": True,
-            "message": f"✅ Carpeta lista ({preindexed_count} preexistentes + {len(missing_docs)} nuevos)"
+            "message": f"✅ Carpeta lista ({len(docs_in_folder)} documentos totales)"
         }
         
     except Exception as e:
@@ -975,6 +995,36 @@ async def check_document_ready(path: str):
         "message": "Documento aún no indexado"
     }
 
+def get_docs_in_xampp_folder_recursive(folder_path: str) -> list:
+    """
+    Escanea recursivamente una carpeta dentro de XAMPP_DOCS_PATH
+    y devuelve todos los documentos PDF/TXT encontrados.
+    """
+    folder_path = folder_path.replace("\\", "/").strip("/")
+    all_docs = []
+    full_folder_path = os.path.join(XAMPP_DOCS_PATH, folder_path)
+    
+    if not os.path.exists(full_folder_path):
+        return all_docs
+    
+    for root, dirs, files in os.walk(full_folder_path):
+        for file in files:
+            ext = os.path.splitext(file)[1].lower()
+            if ext not in SUPPORTED_EXTENSIONS:
+                continue
+            
+            full_path = os.path.join(root, file)
+            relative_path = os.path.relpath(full_path, XAMPP_DOCS_PATH).replace("\\", "/")
+            
+            all_docs.append({
+                "name": file,
+                "relative_path": relative_path,
+                "full_path": full_path,
+                "type": "file",
+                "url": f"{APACHE_BASE_URL}/{relative_path}"
+            })
+    
+    return all_docs
 
 @app.post("/index_xampp_document/")
 async def index_xampp_document(path: str = Form(...)):
