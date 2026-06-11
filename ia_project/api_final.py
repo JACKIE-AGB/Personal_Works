@@ -773,19 +773,16 @@ from fastapi import Body
 
 @app.post("/index_xampp_folder/")
 async def index_xampp_folder(
-    data: dict = Body(...)  # ← Recibir JSON en lugar de Form
+    data: dict = Body(...)
 ):
     """
     Indexa o recupera una carpeta de la BD (incluye subcarpetas).
-    Recibe JSON con folder_path, folder_name y paths.
+    Versión con logs mínimos para terminal limpia.
     """
     try:
         folder_path = data.get("folder_path", "").replace("\\", "/").strip("/")
         folder_name = data.get("folder_name", "")
         paths = data.get("paths", [])
-        
-        print(f"📁 Indexando carpeta: {folder_path}")
-        print(f"📄 Documentos recibidos: {len(paths)}")
         
         meta = load_metadata()
         
@@ -794,14 +791,13 @@ async def index_xampp_folder(
         for _rel, _entry in pmap_disk.items():
             PREINDEX_MAP[_rel] = _entry["conv_id"] if isinstance(_entry, dict) else _entry
         
-        # Atajo 1: La carpeta completa ya fue indexada como unidad
+        # Atajo: La carpeta completa ya fue indexada como unidad
         existing = next(
             (cid for cid, conv_data in meta.items()
              if conv_data.get("type") == "xampp_folder" and conv_data.get("folder_path") == folder_path),
             None
         )
         if existing and os.path.exists(os.path.join(BD_INDICES_DIR, existing)):
-            print(f"⚡ Carpeta ya indexada como unidad: {existing}")
             return {
                 "conversation_id": existing,
                 "ready": True,
@@ -825,8 +821,6 @@ async def index_xampp_folder(
         if not docs_in_folder:
             return JSONResponse(status_code=404, content={"error": "No se encontraron documentos en la carpeta."})
         
-        print(f"📊 Documentos encontrados: {len(docs_in_folder)}")
-        
         # Clasificar documentos
         preindexed_ids = []
         missing_docs = []
@@ -839,20 +833,13 @@ async def index_xampp_folder(
                 conv_dir = os.path.join(BD_INDICES_DIR, conv_id)
                 if conv_id in meta and os.path.exists(conv_dir):
                     preindexed_ids.append((conv_id, conv_dir))
-                    print(f"  ✅ Pre-indexado: {rel_path}")
                 else:
                     missing_docs.append(doc)
-                    print(f"  ⚠️ Índice huérfano: {rel_path}")
             else:
                 missing_docs.append(doc)
-                print(f"  ❌ No indexado: {rel_path}")
-        
-        print(f"📈 Pre-indexados: {len(preindexed_ids)}, Pendientes: {len(missing_docs)}")
         
         # Si NO hay documentos faltantes → fusión RÁPIDA
         if not missing_docs and preindexed_ids:
-            print(f"⚡ Fusión instantánea de {len(preindexed_ids)} índices")
-            
             conv_id = f"xamppfolder_{uuid.uuid4().hex[:8]}"
             conv_dir = os.path.join(BD_INDICES_DIR, conv_id)
             os.makedirs(conv_dir, exist_ok=True)
@@ -882,6 +869,9 @@ async def index_xampp_folder(
             }
             save_metadata(meta)
             
+            # Solo un log simple
+            print(f"✅ Carpeta fusionada: {folder_name} ({docs_count} docs)")
+            
             return {
                 "conversation_id": conv_id,
                 "ready": True,
@@ -889,8 +879,6 @@ async def index_xampp_folder(
             }
         
         # Caso 2: Hay documentos faltantes - procesar SOLO los nuevos
-        print(f"⚠️ Procesando {len(missing_docs)} documentos faltantes...")
-        
         conv_id = f"xamppfolder_{uuid.uuid4().hex[:8]}"
         conv_dir = os.path.join(BD_INDICES_DIR, conv_id)
         os.makedirs(conv_dir, exist_ok=True)
@@ -902,7 +890,6 @@ async def index_xampp_folder(
         for doc in missing_docs:
             full_path = doc["full_path"]
             ext = os.path.splitext(full_path)[1].lower()
-            print(f"  📖 Procesando: {doc['name']}")
             
             if ext == ".pdf":
                 raw_docs = await loop.run_in_executor(_executor, partial(extract_pdf_parallel, full_path))
@@ -915,24 +902,20 @@ async def index_xampp_folder(
         # Dividir documentos nuevos
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         new_chunks = splitter.split_documents(new_documents) if new_documents else []
-        print(f"📦 Chunks generados: {len(new_chunks)}")
         
         def _build_mixed_index():
             if new_chunks:
                 db = FAISS.from_documents(new_chunks, embeddings)
-                print(f"  Base creada con {len(new_chunks)} chunks")
             elif preindexed_ids:
                 _, base_dir = preindexed_ids[0]
                 db = FAISS.load_local(base_dir, embeddings, allow_dangerous_deserialization=True)
                 preindexed_ids.pop(0)
-                print(f"  Base cargada desde índice existente")
             else:
                 raise Exception("No hay documentos para indexar")
             
             for _, extra_dir in preindexed_ids:
                 extra_store = FAISS.load_local(extra_dir, embeddings, allow_dangerous_deserialization=True)
                 db.merge_from(extra_store)
-                print(f"  Fusionado índice adicional")
             
             db.save_local(conv_dir)
             return len(new_chunks), len(preindexed_ids)
@@ -951,7 +934,8 @@ async def index_xampp_folder(
         }
         save_metadata(meta)
         
-        print(f"✅ Carpeta indexada correctamente: {conv_id}")
+        # Log simple
+        print(f"✅ Carpeta indexada: {folder_name} ({len(missing_docs)} nuevos, {len(preindexed_ids)} caché)")
         
         return {
             "conversation_id": conv_id,
@@ -960,9 +944,7 @@ async def index_xampp_folder(
         }
         
     except Exception as e:
-        print(f"❌ Error en index_xampp_folder: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Error en carpeta: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
