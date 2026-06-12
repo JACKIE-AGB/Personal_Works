@@ -1217,7 +1217,7 @@
 </div>
 
 <script>
-const API = "https://abc-merge-musical-relay.trycloudflare.com";
+const API = "https://mods-delays-certificates-wilderness.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
@@ -2003,27 +2003,74 @@ async function processFolderRemote() {
     showStatus("folderStatus", `⚠️ Límite de 150 PDFs por carpeta. Se encontraron ${selectedFolderFiles.length}. Selecciona una subcarpeta con menos documentos.`, "warn");
     return;
   }
-  showStatus("folderStatus", "⚙️ Indexando carpeta (puede demorar)...", "info");
+  showStatus("folderStatus", "⚙️ Subiendo archivos al servidor...", "info");
   const cancelBtn = document.getElementById("cancelFolderBtn");
   if (cancelBtn) cancelBtn.style.display = "inline-flex";
-  folderAbortController = new AbortController();
+
+  let currentJobId = null;
+
+  // Sobreescribir botón cancelar para usar el nuevo endpoint
+  const originalCancelFn = window.cancelFolderProcessing;
+  window.cancelFolderProcessing = async function() {
+    if (currentJobId) {
+      try { await fetch(`${API}/cancel_folder_job/${currentJobId}`, { method: "POST" }); } catch(e) {}
+    }
+    showStatus("folderStatus", "🛑 Cancelación solicitada...", "warn");
+  };
+
   const formData = new FormData();
   selectedFolderFiles.forEach(file => formData.append("files", file));
+
   try {
-    const res = await fetch(`${API}/upload_folder_remote/`, { method: "POST", body: formData, signal: folderAbortController.signal });
-    const data = await res.json();
-    if (res.ok && data.conversation_id) {
-      showStatus("folderStatus", data.message || "✅ Carpeta indexada", "ok");
-      activeConversationId = data.conversation_id;
-      await fetchConversations();
-      await loadConversation(activeConversationId);
-    } else { showStatus("folderStatus", `❌ ${data.error || "Error"}`, "error"); }
+    // 1. Subir archivos y obtener job_id (respuesta inmediata)
+    const res = await fetch(`${API}/upload_folder_remote/`, { method: "POST", body: formData });
+    if (!res.ok) {
+      const data = await res.json();
+      showStatus("folderStatus", `❌ ${data.error || "Error al subir archivos"}`, "error");
+      return;
+    }
+    const { job_id, files_queued } = await res.json();
+    currentJobId = job_id;
+    showStatus("folderStatus", `📄 ${files_queued} PDFs subidos. Procesando...`, "info");
+
+    // 2. Polling hasta que el job termine
+    let done = false;
+    while (!done) {
+      await new Promise(r => setTimeout(r, 2000));
+      let statusRes;
+      try {
+        statusRes = await fetch(`${API}/folder_job_status/${job_id}`);
+      } catch(e) {
+        // Error de red transitorio — seguir intentando
+        continue;
+      }
+      if (!statusRes.ok) break;
+      const jobData = await statusRes.json();
+
+      const pct = jobData.progress ? ` (${jobData.progress}%)` : "";
+      if (jobData.status === "processing") {
+        showStatus("folderStatus", `⚙️ ${jobData.message}${pct}`, "info");
+      } else if (jobData.status === "done") {
+        done = true;
+        showStatus("folderStatus", jobData.message, "ok");
+        activeConversationId = jobData.conversation_id;
+        currentTab = "folder";
+        await fetchConversations();
+        await loadConversation(activeConversationId);
+      } else if (jobData.status === "cancelled") {
+        done = true;
+        showStatus("folderStatus", "🛑 Proceso cancelado", "warn");
+      } else if (jobData.status === "error") {
+        done = true;
+        showStatus("folderStatus", `❌ ${jobData.message}`, "error");
+      }
+    }
   } catch(err) {
-    if (err.name === 'AbortError') showStatus("folderStatus", "🛑 Proceso cancelado", "warn");
-    else showStatus("folderStatus", `❌ Error: ${err.message}`, "error");
+    showStatus("folderStatus", `❌ Error: ${err.message}`, "error");
   } finally {
     if (cancelBtn) cancelBtn.style.display = "none";
-    folderAbortController = null;
+    window.cancelFolderProcessing = originalCancelFn;
+    currentJobId = null;
   }
 }
 

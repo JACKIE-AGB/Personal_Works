@@ -296,6 +296,16 @@ GROQ_CONCURRENCY = 6
 
 CANCELLATION_TOKENS = {}
 
+# =======================================
+# ESTADO DE JOBS EN BACKGROUND (para upload_folder_remote)
+# =======================================
+FOLDER_JOBS: dict[str, dict] = {}
+# Formato: { job_id: { "status": "pending"|"processing"|"done"|"error",
+#                      "conversation_id": str|None,
+#                      "message": str,
+#                      "progress": int,   # 0-100
+#                      "cancelled": bool } }
+
 FILE_LOCK = threading.Lock()
 
 # ── Caché de índices FAISS en memoria (evita load_local en cada consulta) ──
@@ -1373,111 +1383,62 @@ async def upload_pdf(file: UploadFile = File(...), cancel_token: str = Form(None
             del CANCELLATION_TOKENS[cancel_token]
 
 # =======================================
-# ENDPOINT: SUBIR CARPETA REMOTA (CORREGIDO)
+# ENDPOINT: SUBIR CARPETA REMOTA — VERSIÓN ASYNC CON POLLING
 # =======================================
-@app.post("/upload_folder_remote/")
-async def upload_folder_remote(files: List[UploadFile] = File(...), cancel_token: str = Form(None)):
+
+def _run_folder_job(job_id: str, saved_paths: list, folder_name: str, cancel_token: str):
     """
-    Recibe múltiples archivos PDF simulando la subida de una carpeta completa 
-    desde el entorno web remoto.
+    Función que corre en hilo de fondo.
+    Procesa los PDFs guardados, construye el índice FAISS y actualiza FOLDER_JOBS.
     """
-    if not cancel_token:
-        cancel_token = str(uuid.uuid4())
-    CANCELLATION_TOKENS[cancel_token] = False
-    
-    saved_paths = []
+    job = FOLDER_JOBS[job_id]
     all_documents = []
-    conversation_id = None
-    
+    total = len(saved_paths)
+
     try:
-        print(f"📁 Recibidos {len(files)} archivos para procesar")
-        
-        # Filtrar solo PDFs y guardarlos
-        pdf_files = [f for f in files if f.filename.lower().endswith('.pdf')]
-        
-        if not pdf_files:
-            return JSONResponse(status_code=400, content={"error": "No se encontraron archivos PDF válidos en la carpeta subida."})
-        
-        print(f"📄 Procesando {len(pdf_files)} archivos PDF...")
-        
-        # Guardar archivos
-        for file in pdf_files:
-            if CANCELLATION_TOKENS.get(cancel_token) == True:
-                print(f"🛑 Proceso cancelado por el usuario.")
-                for path in saved_paths:
-                    if os.path.exists(path):
-                        try:
-                            os.remove(path)
-                        except:
-                            pass
-                return JSONResponse(status_code=200, content={"message": "Proceso cancelado por el usuario", "cancelled": True})
-
-            # Extraer el nombre base del archivo (sin rutas)
-            base_filename = os.path.basename(file.filename)
-            file_path = os.path.join(UPLOAD_DIR, base_filename)
-            
-            # Manejar duplicados
-            counter = 1
-            original_path = file_path
-            while os.path.exists(file_path):
-                name, ext = os.path.splitext(original_path)
-                file_path = f"{name}_{counter}{ext}"
-                counter += 1
-            
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            saved_paths.append(file_path)
-            print(f"✅ Guardado: {os.path.basename(file_path)}")
-
-        # Procesar cada PDF
-        loop = asyncio.get_event_loop()
         for idx, path in enumerate(saved_paths):
-            if CANCELLATION_TOKENS.get(cancel_token) == True:
-                break
-            
-            print(f"🔍 Procesando ({idx+1}/{len(saved_paths)}): {os.path.basename(path)}")
-            docs = await loop.run_in_executor(_executor, _process_single_pdf, path, cancel_token)
+            if CANCELLATION_TOKENS.get(cancel_token):
+                job["status"] = "cancelled"
+                job["message"] = "Proceso cancelado por el usuario"
+                job["cancelled"] = True
+                _cleanup_paths(saved_paths)
+                return
+
+            job["message"] = f"Leyendo ({idx + 1}/{total}): {os.path.basename(path)}"
+            job["progress"] = int((idx / total) * 70)   # 0-70 % para lectura
+
+            docs = _process_single_pdf(path, cancel_token)
             if docs:
                 all_documents.extend(docs)
-                print(f"   ✓ Extraídas {len(docs)} páginas")
 
-        if CANCELLATION_TOKENS.get(cancel_token) == True:
-            for path in saved_paths:
-                if os.path.exists(path):
-                    try:
-                        os.remove(path)
-                    except:
-                        pass
-            return JSONResponse(status_code=200, content={"message": "Proceso cancelado por el usuario", "cancelled": True})
+        if CANCELLATION_TOKENS.get(cancel_token):
+            job["status"] = "cancelled"
+            job["message"] = "Proceso cancelado por el usuario"
+            job["cancelled"] = True
+            _cleanup_paths(saved_paths)
+            return
 
         if not all_documents:
-            return JSONResponse(status_code=400, content={"error": "No se pudo extraer texto de ningún documento técnico de la carpeta."})
+            job["status"] = "error"
+            job["message"] = "No se pudo extraer texto de ningún documento."
+            _cleanup_paths(saved_paths)
+            return
 
-        # Dividir en chunks e indexar
-        print(f"📊 Total de documentos extraídos: {len(all_documents)}")
+        job["message"] = "Indexando vectores..."
+        job["progress"] = 75
+
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         final_splits = text_splitter.split_documents(all_documents)
-        print(f"📦 Total de chunks generados: {len(final_splits)}")
-        
-        # Crear conversación
+
         meta = load_metadata()
         conv_idx = len(meta) + 1
         conversation_id = f"conversacion_{conv_idx}"
-        conv_dir = _get_conv_dir(conversation_id)
+        conv_dir = os.path.join(INDICES_BASE_DIR, conversation_id)
         os.makedirs(conv_dir, exist_ok=True)
-        
-        # Crear índice FAISS
+
         db = FAISS.from_documents(final_splits, embeddings)
         db.save_local(conv_dir)
-        
-        # Obtener nombre de la carpeta (intentar extraer de la ruta original)
-        folder_name = "Carpeta_Remota"
-        if files and len(files) > 0:
-            first_file = files[0].filename
-            if '/' in first_file:
-                folder_name = first_file.split('/')[0]
-        
-        # Guardar metadatos
+
         meta[conversation_id] = {
             "id": conversation_id,
             "title": f"Carpeta: {folder_name}",
@@ -1489,30 +1450,119 @@ async def upload_folder_remote(files: List[UploadFile] = File(...), cancel_token
         }
         save_metadata(meta)
         register_temp_session(conversation_id)
-        
-        print(f"✅ Carpeta indexada correctamente. ID: {conversation_id}")
-        
-        return {
-            "message": f"✅ Carpeta indexada con éxito. {len(saved_paths)} archivos cargados, {len(final_splits)} chunks creados.",
-            "conversation_id": conversation_id,
-            "files_processed": len(saved_paths),
-            "chunks_created": len(final_splits)
-        }
+
+        job["status"] = "done"
+        job["conversation_id"] = conversation_id
+        job["progress"] = 100
+        job["message"] = (f"✅ Carpeta indexada con éxito. "
+                          f"{len(saved_paths)} archivos, {len(final_splits)} chunks.")
+        print(f"✅ Job {job_id} terminado — conversación: {conversation_id}")
 
     except Exception as e:
-        print(f"❌ Error al procesar carpeta remota: {e}")
         import traceback
         traceback.print_exc()
-        for path in saved_paths:
-            if os.path.exists(path):
-                try:
-                    os.remove(path)
-                except:
-                    pass
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        job["status"] = "error"
+        job["message"] = str(e)
+        _cleanup_paths(saved_paths)
     finally:
         if cancel_token in CANCELLATION_TOKENS:
             del CANCELLATION_TOKENS[cancel_token]
+
+
+def _cleanup_paths(paths: list):
+    for p in paths:
+        if os.path.exists(p):
+            try:
+                os.remove(p)
+            except Exception:
+                pass
+
+
+@app.post("/upload_folder_remote/")
+async def upload_folder_remote(files: List[UploadFile] = File(...), cancel_token: str = Form(None)):
+    """
+    Recibe múltiples archivos PDF, los guarda en disco y arranca el procesamiento
+    en un hilo de fondo. Devuelve un job_id de inmediato para que el frontend
+    haga polling con /folder_job_status/{job_id}.
+    """
+    if not cancel_token:
+        cancel_token = str(uuid.uuid4())
+    CANCELLATION_TOKENS[cancel_token] = False
+
+    pdf_files = [f for f in files if f.filename.lower().endswith(".pdf")]
+    if not pdf_files:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "No se encontraron archivos PDF válidos en la carpeta subida."}
+        )
+
+    # Guardar archivos en disco antes de devolver respuesta
+    saved_paths = []
+    for file in pdf_files:
+        base_filename = os.path.basename(file.filename)
+        file_path = os.path.join(UPLOAD_DIR, base_filename)
+        counter = 1
+        original_path = file_path
+        while os.path.exists(file_path):
+            name, ext = os.path.splitext(original_path)
+            file_path = f"{name}_{counter}{ext}"
+            counter += 1
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        saved_paths.append(file_path)
+
+    # Detectar nombre de carpeta
+    folder_name = "Carpeta_Remota"
+    if files and "/" in files[0].filename:
+        folder_name = files[0].filename.split("/")[0]
+
+    # Crear job y lanzar hilo
+    job_id = str(uuid.uuid4())
+    FOLDER_JOBS[job_id] = {
+        "status": "processing",
+        "conversation_id": None,
+        "message": f"Iniciando procesamiento de {len(saved_paths)} archivos...",
+        "progress": 0,
+        "cancelled": False,
+        "cancel_token": cancel_token,
+    }
+
+    thread = threading.Thread(
+        target=_run_folder_job,
+        args=(job_id, saved_paths, folder_name, cancel_token),
+        daemon=True
+    )
+    thread.start()
+
+    print(f"📁 Job {job_id} iniciado — {len(saved_paths)} PDFs")
+    return {"job_id": job_id, "files_queued": len(saved_paths)}
+
+
+@app.get("/folder_job_status/{job_id}")
+async def folder_job_status(job_id: str):
+    """Polling endpoint: devuelve el estado actual del job de indexación de carpeta."""
+    job = FOLDER_JOBS.get(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"error": "Job no encontrado"})
+    return {
+        "status": job["status"],           # processing | done | error | cancelled
+        "conversation_id": job["conversation_id"],
+        "message": job["message"],
+        "progress": job["progress"],
+        "cancelled": job["cancelled"],
+    }
+
+
+@app.post("/cancel_folder_job/{job_id}")
+async def cancel_folder_job(job_id: str):
+    """Cancela un job de indexación de carpeta en curso."""
+    job = FOLDER_JOBS.get(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"error": "Job no encontrado"})
+    cancel_token = job.get("cancel_token")
+    if cancel_token:
+        CANCELLATION_TOKENS[cancel_token] = True
+    return {"message": "Cancelación solicitada"}
 
 # ── Helper: carga FAISS con caché en memoria ──────────────────────────────────
 def _get_faiss_store(conv_dir: str):
