@@ -834,6 +834,25 @@
       flex-direction: column;
       flex: 1;
     }
+
+    /* ========== DISCLAIMER IA ========== */
+    .results-disclaimer {
+      position: sticky;
+      bottom: 0;
+      width: 100%;
+      text-align: center;
+      padding: 10px 24px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-top: 1px solid #e8eaed;
+      z-index: 50;
+      flex-shrink: 0;
+    }
+    .results-disclaimer span {
+      font-size: 12px;
+      color: #1a1a1a;
+    }
     #panels-repository {
       display: none;
     }
@@ -1196,6 +1215,9 @@
         </div>
         <div id="chatHistory" class="chat-history"></div>
       </div>
+      <div class="results-disclaimer">
+        <span>Este es un programa de IA, puede tardar y cometer errores</span>
+      </div>
     </section>
 
     <div id="previewModal" class="preview-modal">
@@ -1211,13 +1233,13 @@
     </div>
 
     <footer id="main-footer">
-      <div class="footer-country"><span>México - Central Hidroeléctrica El Cajón</span></div>
+      <div class="footer-country" style="text-align:center;"><span>Este es un programa de IA, puede tardar y cometer errores</span></div>
     </footer>
   </div>
 </div>
 
 <script>
-const API = "https://mods-delays-certificates-wilderness.trycloudflare.com";
+const API = "https://zoloft-surfaces-stage-concentrations.trycloudflare.com";
 const CAROUSEL_IMAGES = ["imagen1.jfif", "imagen2.jfif", "imagen3.jfif", "imagen4.jfif", "imagen5.jfif"];
 const CAROUSEL_INTERVAL_MS = 180000;
 const STORAGE_KEY = 'cfe_deleted_conversations';
