@@ -262,21 +262,35 @@ if not GROQ_API_KEY:
     raise ValueError("⛔ GROQ_API_KEY no encontrada en el archivo .env")
 
 # =======================================
-# CONFIGURACIÓN DE MODELOS Y RUTAS PERSISTENTES
+# CONFIGURACIÓN DE MODELOS Y RUTAS PERSISTENTES (MIGRADO A IIS)
 # =======================================
-VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"   # Soporta visión + texto técnico complejo
-TEXT_MODEL   = "meta-llama/llama-4-scout-17b-16e-instruct"   # Mismo modelo: rápido, preciso y multimodal
+VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+TEXT_MODEL   = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 MAX_DOCUMENTS       = 150
 UPLOAD_DIR          = "uploaded_pdfs"
-XAMPP_DOCS_PATH     = r"C:\xampp\htdocs\ia_docs"
-APACHE_BASE_URL     ="http://localhost/ia_docs"
+
+# ✅ LOGICA MEJORADA para producción
+# Intentar obtener la variable de entorno. Si no existe, usar una ruta lógica para producción
+PROD_DOCS_PATH_KEY = "PROD_DOCS_PATH"
+if PROD_DOCS_PATH_KEY in os.environ:
+    XAMPP_DOCS_PATH = os.environ[PROD_DOCS_PATH_KEY]
+else:
+    # En producción, esto no debería pasar, pero es un plan B
+    XAMPP_DOCS_PATH = r"C:\CFE_Data\documentos_bd"
+
+APACHE_BASE_URL_KEY = "PROD_SERVER_URL"
+if APACHE_BASE_URL_KEY in os.environ:
+    APACHE_BASE_URL = os.environ[APACHE_BASE_URL_KEY]
+else:
+    APACHE_BASE_URL = "http://tu-dominio-interno.cfe.mx"
+
 SUPPORTED_EXTENSIONS = [".pdf"]
 INDICES_BASE_DIR    = "stored_conversations"
-BD_INDICES_DIR      = os.path.join(INDICES_BASE_DIR, "bd_indices")   # ← carpeta dedicada para índices de BD (persistente)
+BD_INDICES_DIR      = os.path.join(INDICES_BASE_DIR, "bd_indices")
 METADATA_FILE       = os.path.join(INDICES_BASE_DIR, "conversations.json")
 TEMP_SESSIONS_FILE  = os.path.join(INDICES_BASE_DIR, "temp_sessions.json")
-PREINDEX_MAP_FILE   = os.path.join(BD_INDICES_DIR, "preindex_map.json")   # ← vive dentro de bd_indices
+PREINDEX_MAP_FILE   = os.path.join(BD_INDICES_DIR, "preindex_map.json")  # ← vive dentro de bd_indices
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(INDICES_BASE_DIR, exist_ok=True)
