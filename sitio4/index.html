@@ -1,0 +1,122 @@
+!DOCTYPE <!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="styles.css">
+	<title>Tablas Escolares</title>
+</head>
+<body>
+
+<h1>Panel de Control Escolar</h1>
+
+    <!-- Tabla Alumnos -->
+    <h2>Tabla Alumnos</h2>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Alumno ID</th>
+                    <th>Nombre</th>
+                    <th>Apellido</th>
+                    <th>Fecha Nacimiento</th>
+                    <th>Teléfono</th>
+                    <th>Email</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td>Juan</td>
+                    <td>Pérez</td>
+                    <td>15/05/2010</td>
+                    <td>555-1234</td>
+                    <td>juan.perez@email.com</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>María</td>
+                    <td>Gómez</td>
+                    <td>22/08/2010</td>
+                    <td>555-5678</td>
+                    <td>maria.gomez@email.com</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Tabla Colegiatura -->
+    <h2>Tabla Colegiatura</h2>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Colegiatura ID</th>
+                    <th>Alumno ID</th>
+                    <th>Monto</th>
+                    <th>Mes Pago</th>
+                    <th>Fecha Pago</th>
+                    <th>Estado Pago</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>101</td>
+                    <td>1</td>
+                    <td>$1,500.00</td>
+                    <td>Marzo</td>
+                    <td>02/03/2026</td>
+                    <td><span class="badge-pagado">Pagado</span></td>
+                </tr>
+                <tr>
+                    <td>102</td>
+                    <td>2</td>
+                    <td>$1,500.00</td>
+                    <td>Marzo</td>
+                    <td>05/03/2026</td>
+                    <td><span class="badge-pagado">Pagado</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Tabla Calificaciones -->
+    <h2>Tabla Calificaciones</h2>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Calificación ID</th>
+                    <th>Alumno ID</th>
+                    <th>Materia</th>
+                    <th>Nota</th>
+                    <th>Periodo</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>501</td>
+                    <td>1</td>
+                    <td>Matemáticas</td>
+                    <td>9.5</td>
+                    <td>Parcial 1</td>
+                </tr>
+                <tr>
+                    <td>502</td>
+                    <td>1</td>
+                    <td>Historia</td>
+                    <td>8.8</td>
+                    <td>Parcial 1</td>
+                </tr>
+                <tr>
+                    <td>503</td>
+                    <td>2</td>
+                    <td>Matemáticas</td>
+                    <td>10.0</td>
+                    <td>Parcial 1</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
