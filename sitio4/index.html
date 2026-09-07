@@ -14,6 +14,20 @@
 
 <h2>Tabla Alumnos</h2>
 
+<div class="search-bar">
+    <select id="campo-alumnos">
+        <option value="todos">Todos los campos</option>
+        <option value="0">Alumno ID</option>
+        <option value="1">Nombre</option>
+        <option value="2">Apellido</option>
+        <option value="3">Fecha Nacimiento</option>
+        <option value="4">Teléfono</option>
+        <option value="5">Email</option>
+    </select>
+    <input type="text" id="buscar-alumnos" placeholder="Buscar alumno...">
+    <button type="button" class="btn-search" onclick="buscarRegistros('tbody-alumnos', 'buscar-alumnos', 'campo-alumnos')">Buscar</button>
+</div>
+
 <div class="table-container">
     <table>
         <thead>
@@ -48,6 +62,20 @@
 </div>
 
 <h2>Tabla Colegiatura</h2>
+
+<div class="search-bar">
+    <select id="campo-colegiaturas">
+        <option value="todos">Todos los campos</option>
+        <option value="0">Colegiatura ID</option>
+        <option value="1">Alumno ID</option>
+        <option value="2">Monto</option>
+        <option value="3">Mes Pago</option>
+        <option value="4">Fecha Pago</option>
+        <option value="5">Estado Pago</option>
+    </select>
+    <input type="text" id="buscar-colegiaturas" placeholder="Buscar colegiatura...">
+    <button type="button" class="btn-search" onclick="buscarRegistros('tbody-colegiaturas', 'buscar-colegiaturas', 'campo-colegiaturas')">Buscar</button>
+</div>
 
 <div class="table-container">
     <table>
@@ -88,6 +116,19 @@
 
 <h2>Tabla Calificaciones</h2>
 
+<div class="search-bar">
+    <select id="campo-calificaciones">
+        <option value="todos">Todos los campos</option>
+        <option value="0">Calificación ID</option>
+        <option value="1">Alumno ID</option>
+        <option value="2">Materia</option>
+        <option value="3">Nota</option>
+        <option value="4">Periodo</option>
+    </select>
+    <input type="text" id="buscar-calificaciones" placeholder="Buscar calificación...">
+    <button type="button" class="btn-search" onclick="buscarRegistros('tbody-calificaciones', 'buscar-calificaciones', 'campo-calificaciones')">Buscar</button>
+</div>
+
 <div class="table-container">
     <table>
         <thead>
@@ -119,6 +160,50 @@
 </div>
 
 <script src="script.js"></script>
+
+<script>
+    // Filtra las filas de una tabla según el texto ingresado en su buscador.
+    // - Si el <select> está en "todos", busca en todas las columnas de la fila.
+    // - Si el <select> tiene un índice de columna, busca solo en esa columna.
+    // No modifica script.js: se añade aparte para no interferir con agregarRegistro()/cargarTabla().
+    function buscarRegistros(tbodyId, inputId, selectId) {
+        const tbody = document.getElementById(tbodyId);
+        const valor = document.getElementById(inputId).value.trim().toLowerCase();
+        const campo = document.getElementById(selectId).value; // 'todos' o índice de columna
+
+        Array.from(tbody.querySelectorAll('tr')).forEach(function (fila) {
+            const celdas = fila.querySelectorAll('td');
+            let texto;
+
+            if (campo === 'todos') {
+                texto = Array.from(celdas).map(td => td.textContent).join(' ').toLowerCase();
+            } else {
+                const celda = celdas[Number(campo)];
+                texto = celda ? celda.textContent.toLowerCase() : '';
+            }
+
+            fila.style.display = (valor === '' || texto.includes(valor)) ? '' : 'none';
+        });
+    }
+
+    // Permite buscar también al presionar Enter en el campo de texto.
+    document.querySelectorAll('.search-bar input[type="text"]').forEach(function (input) {
+        input.addEventListener('keyup', function (e) {
+            if (e.key === 'Enter') {
+                const boton = input.closest('.search-bar').querySelector('.btn-search');
+                if (boton) boton.click();
+            }
+        });
+    });
+
+    // Si cambian el campo de búsqueda (select), reaplica la búsqueda con el texto actual.
+    document.querySelectorAll('.search-bar select').forEach(function (select) {
+        select.addEventListener('change', function () {
+            const boton = select.closest('.search-bar').querySelector('.btn-search');
+            if (boton) boton.click();
+        });
+    });
+</script>
 
 </body>
 

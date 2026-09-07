@@ -68,3 +68,78 @@ td {
     font-size: 0.85rem;
     font-weight: bold;
 }
+
+/* Botones estilo azul (mismo tono que el encabezado de las tablas) */
+button,
+.btn {
+    background-color: #2b6cb0;
+    color: #ffffff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+button:hover,
+.btn:hover {
+    background-color: #1a4e82;
+}
+
+button:active,
+.btn:active {
+    transform: scale(0.97);
+}
+
+button:focus-visible,
+.btn:focus-visible {
+    outline: 2px solid #1a365d;
+    outline-offset: 2px;
+}
+
+/* Barra de búsqueda */
+.search-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+
+.search-bar input[type="text"] {
+    flex: 1;
+    max-width: 320px;
+    padding: 9px 12px;
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #333;
+}
+
+.search-bar input[type="text"]:focus {
+    outline: none;
+    border-color: #2b6cb0;
+    box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.2);
+}
+
+.search-bar .btn-search {
+    background-color: #2b6cb0;
+}
+
+.search-bar select {
+    padding: 9px 10px;
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #333;
+    background-color: #ffffff;
+    cursor: pointer;
+}
+
+.search-bar select:focus {
+    outline: none;
+    border-color: #2b6cb0;
+    box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.2);
+}
