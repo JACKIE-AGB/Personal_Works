@@ -26,6 +26,24 @@
                 <th>Email</th>
             </tr>
         </thead>
+        <tbody id="tbody-alumnos">
+            <!-- Los registros se cargan automáticamente con JS -->
+        </tbody>
+        <tfoot>
+            <tr id="form-alumnos">
+                <td><input type="number" name="alumno_id" placeholder="ID" required></td>
+                <td><input type="text" name="nombre" placeholder="Nombre" required></td>
+                <td><input type="text" name="apellido" placeholder="Apellido" required></td>
+                <td><input type="date" name="fecha_nacimiento"></td>
+                <td><input type="text" name="telefono" placeholder="Teléfono"></td>
+                <td><input type="email" name="email" placeholder="Email"></td>
+            </tr>
+            <tr>
+                <td colspan="6">
+                    <button type="button" onclick="agregarRegistro('alumnos')">Agregar Alumno</button>
+                </td>
+            </tr>
+        </tfoot>
     </table>
 </div>
 
@@ -43,6 +61,28 @@
                 <th>Estado Pago</th>
             </tr>
         </thead>
+        <tbody id="tbody-colegiaturas">
+        </tbody>
+        <tfoot>
+            <tr id="form-colegiaturas">
+                <td><input type="number" name="colegiatura_id" placeholder="ID" required></td>
+                <td><input type="number" name="alumno_id" placeholder="Alumno ID" required></td>
+                <td><input type="number" step="0.01" name="monto" placeholder="Monto" required></td>
+                <td><input type="text" name="mes_pagado" placeholder="Mes"></td>
+                <td><input type="date" name="fecha_pago"></td>
+                <td>
+                    <select name="estado_pago">
+                        <option value="Pagado">Pagado</option>
+                        <option value="Pendiente">Pendiente</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="6">
+                    <button type="button" onclick="agregarRegistro('colegiaturas')">Agregar Colegiatura</button>
+                </td>
+            </tr>
+        </tfoot>
     </table>
 </div>
 
@@ -59,8 +99,26 @@
                 <th>Periodo</th>
             </tr>
         </thead>
+        <tbody id="tbody-calificaciones">
+        </tbody>
+        <tfoot>
+            <tr id="form-calificaciones">
+                <td><input type="number" name="calificacion_id" placeholder="ID" required></td>
+                <td><input type="number" name="alumno_id" placeholder="Alumno ID" required></td>
+                <td><input type="text" name="materia" placeholder="Materia" required></td>
+                <td><input type="number" step="0.01" name="nota" placeholder="Nota"></td>
+                <td><input type="text" name="periodo" placeholder="Periodo"></td>
+            </tr>
+            <tr>
+                <td colspan="5">
+                    <button type="button" onclick="agregarRegistro('calificaciones')">Agregar Calificación</button>
+                </td>
+            </tr>
+        </tfoot>
     </table>
 </div>
+
+<script src="script.js"></script>
 
 </body>
 
