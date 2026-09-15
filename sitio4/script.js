@@ -1,95 +1,118 @@
-// script.js
-// Conecta el front-end con api.php (que a su vez habla con MySQL)
-
-const API_URL = 'api.php'; // como todo corre en localhost:8000, la ruta es relativa
-
-// Configuración de cada tabla: en qué <tbody> pintar, y qué columnas mostrar (en orden)
-const TABLAS = {
-    alumnos: {
-        tbodyId: 'tbody-alumnos',
-        columnas: ['alumno_id', 'nombre', 'apellido', 'fecha_nacimiento', 'telefono', 'email']
-    },
-    colegiaturas: {
-        tbodyId: 'tbody-colegiaturas',
-        columnas: ['colegiatura_id', 'alumno_id', 'monto', 'mes_pagado', 'fecha_pago', 'estado_pago']
-    },
-    calificaciones: {
-        tbodyId: 'tbody-calificaciones',
-        columnas: ['calificacion_id', 'alumno_id', 'materia', 'nota', 'periodo']
-    }
-};
-
-// Al cargar la página, pedir los datos de las 3 tablas
 document.addEventListener('DOMContentLoaded', () => {
-    Object.keys(TABLAS).forEach(cargarTabla);
+    // Al cargar la página se muestran los registros por default
+    cargarTodo();
 });
 
-// Pide los registros de una tabla a la API y los pinta en su <tbody>
-async function cargarTabla(nombreTabla) {
-    const config = TABLAS[nombreTabla];
-    const tbody = document.getElementById(config.tbodyId);
-
-    try {
-        const respuesta = await fetch(`${API_URL}?tabla=${nombreTabla}`);
-        const datos = await respuesta.json();
-
-        if (datos.error) {
-            console.error(datos.error);
-            return;
-        }
-
-        tbody.innerHTML = ''; // limpiar antes de repintar
-
-        datos.forEach(registro => {
-            const fila = document.createElement('tr');
-            fila.innerHTML = config.columnas
-                .map(col => `<td>${registro[col] ?? ''}</td>`)
-                .join('');
-            tbody.appendChild(fila);
-        });
-
-    } catch (error) {
-        console.error('Error cargando', nombreTabla, error);
-    }
+function cargarTodo() {
+    cargarTabla('alumnos', 'obtener_alumnos', renderAlumnos);
+    cargarTabla('colegiaturas', 'obtener_colegiaturas', renderColegiaturas);
+    cargarTabla('calificaciones', 'obtener_calificaciones', renderCalificaciones);
 }
 
-// Lee los inputs del formulario de una tabla y los envía a la API por POST
-async function agregarRegistro(nombreTabla) {
-    const filaFormulario = document.getElementById(`form-${nombreTabla}`);
-    const inputs = filaFormulario.querySelectorAll('input, select');
+function cargarTabla(tipo, accion, callbackRender) {
+    fetch(`api.php?action=${accion}`)
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById(`tbody-${tipo}`);
+            tbody.innerHTML = '';
+            data.forEach(item => {
+                tbody.innerHTML += callbackRender(item);
+            });
+        })
+        .catch(error => console.error('Error al obtener datos:', error));
+}
 
-    const datosForm = new FormData();
-    datosForm.append('tabla', nombreTabla);
+// Generadores de HTML para las filas
+function renderAlumnos(item) {
+    return `
+        <tr>
+            <td>${item.alumno_id}</td>
+            <td>${item.nombre}</td>
+            <td>${item.apellido}</td>
+            <td>${item.fecha_nacimiento || ''}</td>
+            <td>${item.telefono || ''}</td>
+            <td>${item.email || ''}</td>
+        </tr>
+    `;
+}
 
-    let vacioObligatorio = false;
+function renderColegiaturas(item) {
+    const badgeClass = item.estado_pago === 'Pagado' ? 'badge-pagado' : '';
+    return `
+        <tr>
+            <td>${item.colegiatura_id}</td>
+            <td>${item.alumno_id}</td>
+            <td>$${parseFloat(item.monto).toFixed(2)}</td>
+            <td>${item.mes_pagado || ''}</td>
+            <td>${item.fecha_pago || ''}</td>
+            <td><span class="${badgeClass}">${item.estado_pago}</span></td>
+        </tr>
+    `;
+}
+
+function renderCalificaciones(item) {
+    return `
+        <tr>
+            <td>${item.calificacion_id}</td>
+            <td>${item.alumno_id}</td>
+            <td>${item.materia}</td>
+            <td>${item.nota !== null ? item.nota : ''}</td>
+            <td>${item.periodo || ''}</td>
+        </tr>
+    `;
+}
+
+// Función ejecutada por los botones "Agregar..."
+function agregarRegistro(tipo) {
+    const contenedor = document.getElementById(`form-${tipo}`);
+    const inputs = contenedor.querySelectorAll('input, select');
+    const payload = {};
+
+    let formularioValido = true;
+
     inputs.forEach(input => {
-        if (input.required && !input.value) vacioObligatorio = true;
-        datosForm.append(input.name, input.value);
+        if (input.hasAttribute('required') && !input.value.trim()) {
+            formularioValido = false;
+        }
+        payload[input.name] = input.value;
     });
 
-    if (vacioObligatorio) {
-        alert('Por favor llena los campos obligatorios.');
+    if (!formularioValido) {
+        alert('Por favor llena los campos requeridos (*).');
         return;
     }
 
-    try {
-        const respuesta = await fetch(API_URL, {
-            method: 'POST',
-            body: datosForm
-        });
-        const resultado = await respuesta.json();
+    let accion = '';
+    if (tipo === 'alumnos') accion = 'agregar_alumno';
+    if (tipo === 'colegiaturas') accion = 'agregar_colegiatura';
+    if (tipo === 'calificaciones') accion = 'agregar_calificacion';
 
-        if (resultado.error) {
-            alert('Error: ' + resultado.error);
-            return;
+    fetch(`api.php?action=${accion}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.status === 'ok') {
+            // Limpiar inputs del formulario
+            inputs.forEach(i => {
+                if (i.tagName === 'SELECT') {
+                    i.selectedIndex = 0;
+                } else {
+                    i.value = '';
+                }
+            });
+
+            // Recargar únicamente la tabla modificada
+            if (tipo === 'alumnos') cargarTabla('alumnos', 'obtener_alumnos', renderAlumnos);
+            if (tipo === 'colegiaturas') cargarTabla('colegiaturas', 'obtener_colegiaturas', renderColegiaturas);
+            if (tipo === 'calificaciones') cargarTabla('calificaciones', 'obtener_calificaciones', renderCalificaciones);
+        } else {
+            alert('Ocurrió un error al guardar el registro en la BD.');
         }
-
-        // Limpiar el formulario y recargar la tabla para ver el nuevo registro
-        inputs.forEach(input => { if (input.tagName === 'INPUT') input.value = ''; });
-        cargarTabla(nombreTabla);
-
-    } catch (error) {
-        console.error('Error agregando registro:', error);
-        alert('No se pudo agregar el registro.');
-    }
+    })
+    .catch(err => console.error('Error:', err));
 }

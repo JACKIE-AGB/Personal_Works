@@ -1,116 +1,80 @@
 <?php
-// api.php
-// Endpoint único para las 3 tablas.
-// GET  api.php?tabla=alumnos            -> lista todos los registros
-// POST api.php  (form-data: tabla=alumnos, + campos)  -> inserta un registro
+header("Content-Type: application/json; charset=UTF-8");
+require_once "database.php";
 
-header('Content-Type: application/json; charset=utf-8');
-require_once 'config.php';
+$method = $_SERVER['REQUEST_METHOD'];
+$action = $_GET['action'] ?? '';
 
-// Lista blanca de tablas permitidas (nombre "amigable" -> nombre real en la BD)
-$tablasPermitidas = [
-    'alumnos'       => 'Alumnos',
-    'colegiaturas'  => 'Colegiaturas',
-    'calificaciones'=> 'Calificaciones',
-];
-
-$metodo = $_SERVER['REQUEST_METHOD'];
-$tablaParam = $_GET['tabla'] ?? $_POST['tabla'] ?? '';
-
-if (!array_key_exists($tablaParam, $tablasPermitidas)) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Tabla no válida']);
-    exit;
-}
-
-$tabla = $tablasPermitidas[$tablaParam];
-
-// ---------------------------------------------------------
-// GET: devolver todos los registros de la tabla solicitada
-// ---------------------------------------------------------
-if ($metodo === 'GET') {
-    $resultado = $conn->query("SELECT * FROM `$tabla`");
-
-    if (!$resultado) {
-        http_response_code(500);
-        echo json_encode(['error' => $conn->error]);
+// --- OBTENER REGISTROS (GET) ---
+if ($method === 'GET') {
+    if ($action === 'obtener_alumnos') {
+        $stmt = $pdo->query("SELECT * FROM alumnos");
+        echo json_encode($stmt->fetchAll());
         exit;
     }
 
-    $filas = [];
-    while ($fila = $resultado->fetch_assoc()) {
-        $filas[] = $fila;
+    if ($action === 'obtener_colegiaturas') {
+        $stmt = $pdo->query("SELECT * FROM colegiaturas");
+        echo json_encode($stmt->fetchAll());
+        exit;
     }
 
-    echo json_encode($filas);
-    exit;
+    if ($action === 'obtener_calificaciones') {
+        $stmt = $pdo->query("SELECT * FROM calificaciones");
+        echo json_encode($stmt->fetchAll());
+        exit;
+    }
 }
 
-// ---------------------------------------------------------
-// POST: insertar un nuevo registro
-// ---------------------------------------------------------
-if ($metodo === 'POST') {
+// --- AGREGAR REGISTROS (POST) ---
+if ($method === 'POST') {
+    $data = json_decode(file_get_contents("php://input"), true);
 
-    switch ($tablaParam) {
-
-        case 'alumnos':
-            $stmt = $conn->prepare(
-                "INSERT INTO Alumnos (alumno_id, nombre, apellido, fecha_nacimiento, telefono, email)
-                 VALUES (?, ?, ?, ?, ?, ?)"
-            );
-            $stmt->bind_param(
-                'isssss',
-                $_POST['alumno_id'],
-                $_POST['nombre'],
-                $_POST['apellido'],
-                $_POST['fecha_nacimiento'],
-                $_POST['telefono'],
-                $_POST['email']
-            );
-            break;
-
-        case 'colegiaturas':
-            $stmt = $conn->prepare(
-                "INSERT INTO Colegiaturas (colegiatura_id, alumno_id, monto, mes_pagado, fecha_pago, estado_pago)
-                 VALUES (?, ?, ?, ?, ?, ?)"
-            );
-            $stmt->bind_param(
-                'iidsss',
-                $_POST['colegiatura_id'],
-                $_POST['alumno_id'],
-                $_POST['monto'],
-                $_POST['mes_pagado'],
-                $_POST['fecha_pago'],
-                $_POST['estado_pago']
-            );
-            break;
-
-        case 'calificaciones':
-            $stmt = $conn->prepare(
-                "INSERT INTO Calificaciones (calificacion_id, alumno_id, materia, nota, periodo)
-                 VALUES (?, ?, ?, ?, ?)"
-            );
-            $stmt->bind_param(
-                'iisds',
-                $_POST['calificacion_id'],
-                $_POST['alumno_id'],
-                $_POST['materia'],
-                $_POST['nota'],
-                $_POST['periodo']
-            );
-            break;
+    if ($action === 'agregar_alumno') {
+        $sql = "INSERT INTO alumnos (alumno_id, nombre, apellido, fecha_nacimiento, telefono, email) 
+                VALUES (:alumno_id, :nombre, :apellido, :fecha_nacimiento, :telefono, :email)";
+        $stmt = $pdo->prepare($sql);
+        $result = $stmt->execute([
+            ':alumno_id'        => $data['alumno_id'],
+            ':nombre'           => $data['nombre'],
+            ':apellido'         => $data['apellido'],
+            ':fecha_nacimiento' => $data['fecha_nacimiento'] ?: null,
+            ':telefono'         => $data['telefono'] ?: null,
+            ':email'            => $data['email'] ?: null
+        ]);
+        echo json_encode(["status" => $result ? "ok" : "error"]);
+        exit;
     }
 
-    if ($stmt->execute()) {
-        echo json_encode(['ok' => true, 'mensaje' => 'Registro agregado correctamente']);
-    } else {
-        http_response_code(500);
-        echo json_encode(['error' => $stmt->error]);
+    if ($action === 'agregar_colegiatura') {
+        $sql = "INSERT INTO colegiaturas (colegiatura_id, alumno_id, monto, mes_pagado, fecha_pago, estado_pago) 
+                VALUES (:colegiatura_id, :alumno_id, :monto, :mes_pagado, :fecha_pago, :estado_pago)";
+        $stmt = $pdo->prepare($sql);
+        $result = $stmt->execute([
+            ':colegiatura_id' => $data['colegiatura_id'],
+            ':alumno_id'      => $data['alumno_id'],
+            ':monto'          => $data['monto'],
+            ':mes_pagado'     => $data['mes_pagado'] ?: null,
+            ':fecha_pago'     => $data['fecha_pago'] ?: null,
+            ':estado_pago'    => $data['estado_pago']
+        ]);
+        echo json_encode(["status" => $result ? "ok" : "error"]);
+        exit;
     }
 
-    $stmt->close();
-    exit;
+    if ($action === 'agregar_calificacion') {
+        $sql = "INSERT INTO calificaciones (calificacion_id, alumno_id, materia, nota, periodo) 
+                VALUES (:calificacion_id, :alumno_id, :materia, :nota, :periodo)";
+        $stmt = $pdo->prepare($sql);
+        $result = $stmt->execute([
+            ':calificacion_id' => $data['calificacion_id'],
+            ':alumno_id'       => $data['alumno_id'],
+            ':materia'         => $data['materia'],
+            ':nota'            => $data['nota'] ?: null,
+            ':periodo'         => $data['periodo'] ?: null
+        ]);
+        echo json_encode(["status" => $result ? "ok" : "error"]);
+        exit;
+    }
 }
-
-http_response_code(405);
-echo json_encode(['error' => 'Método no permitido']);
+?>
