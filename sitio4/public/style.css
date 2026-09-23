@@ -1,0 +1,175 @@
+:root {
+  --azul: #2f5fdb;
+  --azul-oscuro: #1e3fa0;
+  --gris-fondo: #f4f6fb;
+  --gris-borde: #e0e4ee;
+  --texto: #222738;
+  --texto-suave: #6b7280;
+  --verde: #1c9c5b;
+  --rojo: #d64545;
+  --radio: 10px;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--gris-fondo);
+  color: var(--texto);
+}
+
+header {
+  background: linear-gradient(135deg, var(--azul), var(--azul-oscuro));
+  color: white;
+  padding: 28px 24px;
+  text-align: center;
+}
+header h1 { margin: 0 0 6px 0; font-size: 1.8rem; }
+header p { margin: 0; opacity: 0.9; font-size: 0.95rem; }
+
+main {
+  max-width: 980px;
+  margin: 24px auto;
+  padding: 0 16px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.card {
+  background: white;
+  border: 1px solid var(--gris-borde);
+  border-radius: var(--radio);
+  padding: 20px 22px;
+  box-shadow: 0 1px 3px rgba(20, 30, 60, 0.05);
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 0.82rem; color: var(--texto-suave); font-weight: 600; }
+
+input, select {
+  padding: 9px 10px;
+  border: 1px solid var(--gris-borde);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: white;
+  color: var(--texto);
+}
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--azul);
+  box-shadow: 0 0 0 3px rgba(47, 95, 219, 0.15);
+}
+
+.actions { display: flex; gap: 10px; }
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.05s ease, opacity 0.15s ease;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--azul); color: white; }
+.btn-primary:hover { background: var(--azul-oscuro); }
+.btn-secondary { background: #eef0f6; color: var(--texto); }
+.btn-secondary:hover { background: #e2e5f0; }
+.btn-danger { background: #fde8e8; color: var(--rojo); }
+.btn-danger:hover { background: #fbd4d4; }
+.btn-sm { padding: 5px 9px; font-size: 0.78rem; border-radius: 6px; }
+
+.search-bar { display: flex; gap: 10px; flex-wrap: wrap; }
+.search-bar input { flex: 1; min-width: 200px; }
+
+.badge {
+  background: var(--azul);
+  color: white;
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 0.78rem;
+  vertical-align: middle;
+}
+
+.table-wrap { overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+th, td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--gris-borde);
+  white-space: nowrap;
+}
+th { color: var(--texto-suave); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+tbody tr:hover { background: #f8f9fd; }
+
+.row-actions { display: flex; gap: 6px; }
+
+.hint { color: var(--texto-suave); font-size: 0.9rem; text-align: center; padding: 14px 0; }
+
+.detalle-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 14px;
+}
+@media (max-width: 700px) {
+  .detalle-grid { grid-template-columns: 1fr; }
+}
+
+.mini-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.mini-form input, .mini-form select { flex: 1; min-width: 90px; }
+
+.lista-detalle { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.lista-detalle li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8f9fd;
+  border: 1px solid var(--gris-borde);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.88rem;
+}
+
+.estado-pagado { color: var(--verde); font-weight: 600; }
+.estado-pendiente { color: #b8860b; font-weight: 600; }
+.estado-vencido { color: var(--rojo); font-weight: 600; }
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--texto);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  z-index: 100;
+}
+.toast.error { background: var(--rojo); }

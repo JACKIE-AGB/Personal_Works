@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gestión Escolar</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header>
+  <h1>🏫 Gestión Escolar</h1>
+  <p>Alumnos, colegiaturas y calificaciones — conectado a la base de datos</p>
+</header>
+
+<main>
+
+  <!-- ===== Alta / edición de alumno ===== -->
+  <section class="card">
+    <h2 id="form-title">Agregar alumno</h2>
+    <form id="form-alumno">
+      <input type="hidden" id="alumno_id" />
+      <div class="grid">
+        <div class="field">
+          <label for="nombre">Nombre *</label>
+          <input type="text" id="nombre" required />
+        </div>
+        <div class="field">
+          <label for="apellido">Apellido *</label>
+          <input type="text" id="apellido" required />
+        </div>
+        <div class="field">
+          <label for="fecha_nacimiento">Fecha de nacimiento</label>
+          <input type="date" id="fecha_nacimiento" />
+        </div>
+        <div class="field">
+          <label for="telefono">Teléfono</label>
+          <input type="tel" id="telefono" />
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" />
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit" id="btn-guardar" class="btn btn-primary">➕ Agregar alumno</button>
+        <button type="button" id="btn-cancelar" class="btn btn-secondary" hidden>Cancelar edición</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ===== Búsqueda ===== -->
+  <section class="card">
+    <h2>Buscar alumnos</h2>
+    <div class="search-bar">
+      <input type="text" id="buscar" placeholder="Buscar por nombre, apellido o email..." />
+      <button id="btn-buscar" class="btn btn-primary">🔍 Buscar</button>
+      <button id="btn-limpiar" class="btn btn-secondary">✖ Limpiar</button>
+    </div>
+  </section>
+
+  <!-- ===== Listado de alumnos ===== -->
+  <section class="card">
+    <h2>Alumnos registrados <span id="contador" class="badge">0</span></h2>
+    <div class="table-wrap">
+      <table id="tabla-alumnos">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Apellido</th>
+            <th>F. Nacimiento</th>
+            <th>Teléfono</th>
+            <th>Email</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="alumnos-tbody">
+          <!-- filas generadas por app.js -->
+        </tbody>
+      </table>
+    </div>
+    <p id="sin-resultados" class="hint" hidden>No se encontraron alumnos.</p>
+  </section>
+
+  <!-- ===== Panel de detalle: colegiaturas y calificaciones ===== -->
+  <section class="card" id="panel-detalle" hidden>
+    <h2 id="detalle-titulo">Detalle del alumno</h2>
+    <button id="btn-cerrar-detalle" class="btn btn-secondary">✖ Cerrar</button>
+
+    <div class="detalle-grid">
+      <!-- Colegiaturas -->
+      <div>
+        <h3>💰 Colegiaturas</h3>
+        <form id="form-colegiatura" class="mini-form">
+          <input type="number" step="0.01" id="col-monto" placeholder="Monto" required />
+          <input type="date" id="col-fecha" />
+          <select id="col-estado">
+            <option value="pagado">Pagado</option>
+            <option value="pendiente" selected>Pendiente</option>
+            <option value="vencido">Vencido</option>
+          </select>
+          <button type="submit" class="btn btn-primary">Agregar</button>
+        </form>
+        <ul id="lista-colegiaturas" class="lista-detalle"></ul>
+      </div>
+
+      <!-- Calificaciones -->
+      <div>
+        <h3>📝 Calificaciones</h3>
+        <form id="form-calificacion" class="mini-form">
+          <input type="text" id="cal-materia" placeholder="Materia" required />
+          <input type="number" step="0.1" min="0" max="10" id="cal-nota" placeholder="Nota" required />
+          <input type="text" id="cal-periodo" placeholder="Periodo (ej. 2026-1)" />
+          <button type="submit" class="btn btn-primary">Agregar</button>
+        </form>
+        <ul id="lista-calificaciones" class="lista-detalle"></ul>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
