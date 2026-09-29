@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "idPedido": 1,
+    "idCliente": "9999",
+    "idProducto": "1024",
+    "producto": "Comic spiderman",
+    "marca": "Marvel",
+    "unidad": "1 pieza",
+    "precio": 100
+  }
+]
