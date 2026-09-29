@@ -1,0 +1,29 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/estilos.css"><title>Consultar pedidos | El Multiverso</title></head>
+<body class="con-fondo">
+<header id="barra"></header>
+<main>
+  <section class="panel ancho">
+    <h1 id="titulo">Mis Pedidos</h1>
+    <div class="tabla-wrap">
+      <table>
+        <thead><tr><th>ID Pedido</th><th>ID Producto</th><th>Producto</th><th>Marca</th><th>Unidad</th><th>Precio</th></tr></thead>
+        <tbody id="filas"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script src="/js/app.js"></script>
+<script>
+iniciarBarra();
+(async () => {
+  const { idCliente, pedidos } = await api('/api/pedidos/mios');
+  document.getElementById('titulo').textContent = 'Mis Pedidos (Cliente: ' + idCliente + ')';
+  document.getElementById('filas').innerHTML = pedidos.length
+    ? pedidos.map(p => `<tr><td>${p.idPedido}</td><td>${esc(p.idProducto)}</td><td>${esc(p.producto)}</td><td>${esc(p.marca)}</td><td>${esc(p.unidad)}</td><td>${dinero(p.precio)}</td></tr>`).join('')
+    : '<tr><td colspan="6" class="vacio">Aún no has registrado pedidos. Ve a "Registrar pedido" para crear el primero.</td></tr>';
+})();
+</script>
+</body></html>

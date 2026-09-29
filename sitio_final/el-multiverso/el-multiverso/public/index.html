@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/estilos.css"><title>El Multiverso | Inicio</title></head>
+<body>
+<header id="barra"></header>
+<main>
+  <section class="portada">
+    <h1>Bienvenido a El Multiverso</h1>
+    <p>Tu tienda especializada en revistas de cómics, álbumes coleccionables y artículos de tus series y películas favoritas.</p>
+  </section>
+
+  <!-- Carrusel: 5 imágenes, cambia cada 5 segundos. Imágenes: img/carrusel-1.jpg ... carrusel-5.jpg -->
+  <section class="carrusel" id="carrusel" aria-roledescription="carrusel" aria-label="Novedades"></section>
+
+  <section class="seccion-cat">
+    <h2>Nuestras Categorías y Servicios</h2>
+    <div class="categorias">
+      <article class="cat">
+        <div class="img"><img src="/img/categoria-comics.jpg" alt="Cómics y revistas" onerror="this.replaceWith('Coloca img/categoria-comics.jpg')"></div>
+        <div class="cuerpo"><h3>Cómics y Revistas</h3>
+          <p>Contamos con un amplio catálogo de números semanales, tomos recopilatorios y ediciones especiales de las mejores editoriales.</p>
+          <a class="btn btn-azul btn-block" href="/registrar-pedido.html">Explorar y Pedir</a></div>
+      </article>
+      <article class="cat">
+        <div class="img"><img src="/img/categoria-albumes.jpg" alt="Álbumes coleccionables" onerror="this.replaceWith('Coloca img/categoria-albumes.jpg')"></div>
+        <div class="cuerpo"><h3>Álbumes Coleccionables</h3>
+          <p>Encuentra álbumes de estampas completas, sobres sellados y carpetas organizadoras para tus colecciones favoritas.</p>
+          <a class="btn btn-azul btn-block" href="/registrar-pedido.html">Explorar y Pedir</a></div>
+      </article>
+      <article class="cat">
+        <div class="img"><img src="/img/categoria-figuras.jpg" alt="Figuras y artículos de colección" onerror="this.replaceWith('Coloca img/categoria-figuras.jpg')"></div>
+        <div class="cuerpo"><h3>Figuras y Artículos de Colección</h3>
+          <p>Figuras de acción articuladas, estatuas de resina, réplicas a escala y memorabilia de películas y series animadas.</p>
+          <a class="btn btn-azul btn-block" href="/registrar-pedido.html">Explorar y Pedir</a></div>
+      </article>
+    </div>
+  </section>
+</main>
+<footer>&copy; El Multiverso</footer>
+<script src="/js/app.js"></script>
+<script>
+iniciarBarra();
+
+// ---- Carrusel ----
+const SLIDES = [
+  { img: '/img/carrusel-1.jpg', titulo: 'Álbumes Coleccionables', texto: 'Haz clic para conocer nuestros álbumes de estampas y estampillas oficiales.' },
+  { img: '/img/carrusel-2.jpg', titulo: 'Cómics y Revistas', texto: 'Números semanales, tomos recopilatorios y ediciones especiales.' },
+  { img: '/img/carrusel-3.jpg', titulo: 'Figuras de Colección', texto: 'Estatuas, réplicas y figuras articuladas de tus héroes favoritos.' },
+  { img: '/img/carrusel-4.jpg', titulo: 'Ediciones Especiales', texto: 'Títulos clásicos y lanzamientos que no puedes dejar pasar.' },
+  { img: '/img/carrusel-5.jpg', titulo: 'Pide lo que buscas', texto: 'Registra tu pedido y lo apartamos para ti.' }
+];
+const cont = document.getElementById('carrusel');
+cont.innerHTML = SLIDES.map((s, i) => `
+  <a class="slide ${i === 0 ? 'activo' : ''}" href="/registrar-pedido.html" aria-hidden="${i !== 0}">
+    <img src="${s.img}" alt="${s.titulo}" onerror="this.parentElement.classList.add('sin-img');this.remove()">
+    <div class="falta">Coloca tu imagen en <br>${s.img.replace('/img/','img/')}</div>
+    <div class="leyenda"><strong>${s.titulo}</strong><small>${s.texto}</small></div>
+  </a>`).join('') + '<div class="puntos">' + SLIDES.map((_, i) => `<button class="punto ${i === 0 ? 'activo' : ''}" aria-label="Ir a la imagen ${i + 1}"></button>`).join('') + '</div>';
+
+const slides = [...cont.querySelectorAll('.slide')], puntos = [...cont.querySelectorAll('.punto')];
+let actual = 0, timer;
+function ir(n) {
+  slides[actual].classList.remove('activo'); puntos[actual].classList.remove('activo');
+  actual = (n + slides.length) % slides.length;
+  slides[actual].classList.add('activo'); puntos[actual].classList.add('activo');
+  slides.forEach((s, i) => s.setAttribute('aria-hidden', i !== actual));
+}
+function iniciar() { clearInterval(timer); timer = setInterval(() => ir(actual + 1), 5000); } // cada 5 segundos
+puntos.forEach((p, i) => p.addEventListener('click', () => { ir(i); iniciar(); }));
+iniciar();
+</script>
+</body></html>

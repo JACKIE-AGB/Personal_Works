@@ -1,0 +1,104 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/estilos.css"><title>Administrar pedidos | El Multiverso</title></head>
+<body class="con-fondo">
+<header id="barra"></header>
+<main>
+  <section class="panel ancho">
+    <h1>Administrar Pedidos (Panel Admin)</h1>
+    <div id="msg" class="alerta oculto" role="alert"></div>
+    <form class="filtro" id="formFiltro">
+      <label for="filtro" style="margin:0">Proporcione el IDUsuario del cliente:</label>
+      <input id="filtro" placeholder="Ej. 9999 (Vacío = Todos)" inputmode="numeric" maxlength="4">
+      <button class="btn btn-gris btn-sm" type="submit">Consultar</button>
+    </form>
+    <div class="tabla-wrap">
+      <table>
+        <thead><tr><th class="t-centro">ID Pedido</th><th class="t-centro">ID Cliente</th><th class="t-centro">ID Producto</th><th class="t-centro">Producto</th><th class="t-centro">Marca</th><th class="t-centro">Unidad</th><th class="t-centro">Precio</th><th class="t-centro">Acciones</th></tr></thead>
+        <tbody id="filas"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <dialog id="dlg">
+    <form id="formEd" method="dialog" novalidate>
+      <h2 id="dlgTitulo">Editar pedido</h2>
+      <div id="msgEd" class="alerta oculto" role="alert"></div>
+      <div class="campo"><label for="eCliente">ID Cliente:</label><input id="eCliente" maxlength="4" inputmode="numeric"></div>
+      <div class="campo"><label for="eIdProd">ID de producto:</label><input id="eIdProd"></div>
+      <div class="campo"><label for="eProd">Nombre del producto:</label><input id="eProd"></div>
+      <div class="campo"><label for="eMarca">Marca:</label><input id="eMarca"></div>
+      <div class="campo"><label for="eUnidad">Unidad de medida:</label><input id="eUnidad"></div>
+      <div class="campo"><label for="ePrecio">Precio ($):</label><input id="ePrecio" type="number" min="0" step="0.01"></div>
+      <div class="acciones">
+        <button class="btn btn-azul" type="submit" id="btnGuardarEd">Guardar cambios</button>
+        <button class="btn btn-borde" type="button" id="btnCancelarEd">Cancelar</button>
+      </div>
+    </form>
+  </dialog>
+</main>
+<script src="/js/app.js"></script>
+<script>
+iniciarBarra();
+const $ = id => document.getElementById(id);
+let lista = [], editando = null;
+
+async function cargar() {
+  const c = $('filtro').value.trim();
+  try {
+    lista = (await api('/api/admin/pedidos' + (c ? '?cliente=' + encodeURIComponent(c) : ''))).pedidos;
+    pintar();
+  } catch (err) { mostrarAlerta($('msg'), err.message); }
+}
+function pintar() {
+  $('filas').innerHTML = lista.length ? lista.map(p => `
+    <tr>
+      <td class="t-centro"><strong>${p.idPedido}</strong></td>
+      <td class="t-centro"><span class="chip">${esc(p.idCliente)}</span></td>
+      <td class="t-centro">${esc(p.idProducto)}</td>
+      <td>${esc(p.producto)}</td>
+      <td class="t-centro">${esc(p.marca)}</td>
+      <td class="t-centro">${esc(p.unidad)}</td>
+      <td class="t-centro precio">${dinero(p.precio)}</td>
+      <td class="t-centro" style="white-space:nowrap">
+        <button class="btn btn-azul btn-sm" data-editar="${p.idPedido}">Editar</button>
+        <button class="btn btn-rojo btn-sm" data-borrar="${p.idPedido}">Eliminar</button>
+      </td></tr>`).join('')
+    : '<tr><td colspan="8" class="vacio">No hay pedidos para mostrar.</td></tr>';
+}
+
+$('formFiltro').addEventListener('submit', e => { e.preventDefault(); $('msg').classList.add('oculto'); cargar(); });
+
+$('filas').addEventListener('click', async e => {
+  const ed = e.target.dataset.editar, bo = e.target.dataset.borrar;
+  if (ed) {
+    editando = lista.find(p => p.idPedido === Number(ed));
+    $('dlgTitulo').textContent = 'Editar pedido #' + editando.idPedido;
+    $('eCliente').value = editando.idCliente; $('eIdProd').value = editando.idProducto; $('eProd').value = editando.producto;
+    $('eMarca').value = editando.marca; $('eUnidad').value = editando.unidad; $('ePrecio').value = editando.precio;
+    $('msgEd').classList.add('oculto');
+    $('dlg').showModal();
+  }
+  if (bo && confirm('¿Eliminar el pedido #' + bo + '? Esta acción no se puede deshacer.')) {
+    try { await api('/api/admin/pedidos/' + bo, { method: 'DELETE' }); mostrarAlerta($('msg'), 'Pedido #' + bo + ' eliminado.', 'ok'); cargar(); }
+    catch (err) { mostrarAlerta($('msg'), err.message); }
+  }
+});
+
+$('btnCancelarEd').addEventListener('click', () => $('dlg').close());
+$('formEd').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    await api('/api/admin/pedidos/' + editando.idPedido, { method: 'PUT', body: {
+      idCliente: $('eCliente').value, idProducto: $('eIdProd').value, producto: $('eProd').value,
+      marca: $('eMarca').value, unidad: $('eUnidad').value, precio: $('ePrecio').value } });
+    $('dlg').close();
+    mostrarAlerta($('msg'), 'Pedido #' + editando.idPedido + ' actualizado.', 'ok');
+    cargar();
+  } catch (err) { mostrarAlerta($('msgEd'), err.message); }
+});
+
+cargar();
+</script>
+</body></html>

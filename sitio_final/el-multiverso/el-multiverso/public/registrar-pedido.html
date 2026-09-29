@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/estilos.css"><title>Registrar pedido | El Multiverso</title></head>
+<body class="con-fondo">
+<header id="barra"></header>
+<main>
+  <form class="panel" id="formPed" novalidate>
+    <h1>Registrar pedido</h1>
+    <div id="msg" class="alerta oculto" role="alert"></div>
+    <!-- Solo lo ve el administrador -->
+    <div class="campo oculto" id="bloqueCliente"><label for="idCliente">IDUsuario del Cliente:</label><input id="idCliente" inputmode="numeric" maxlength="4" placeholder="Ej. 9999"></div>
+    <div class="campo"><label for="idProducto">ID de producto:</label><input id="idProducto" placeholder="Ej. 1234"></div>
+    <div class="campo"><label for="producto">Nombre del producto:</label><input id="producto" placeholder="Ej. Álbum de Spiderman 2026"></div>
+    <div class="campo"><label for="marca">Marca:</label><input id="marca" placeholder="Ej. Marvel"></div>
+    <div class="campo"><label for="unidad">Unidad de medida:</label><input id="unidad" placeholder="Ej. Pieza"></div>
+    <div class="campo"><label for="precio">Precio ($):</label><input id="precio" type="number" min="0" step="0.01" placeholder="Ej. 380"></div>
+    <button class="btn btn-azul btn-block" type="submit">Guardar Pedido</button>
+  </form>
+</main>
+<script src="/js/app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let usuario;
+iniciarBarra().then(u => {
+  usuario = u;
+  if (u && u.tipo === 'PT') document.getElementById('bloqueCliente').classList.remove('oculto');
+});
+$('formPed').addEventListener('submit', async e => {
+  e.preventDefault();
+  const msg = $('msg');
+  const body = { idProducto: $('idProducto').value, producto: $('producto').value, marca: $('marca').value, unidad: $('unidad').value, precio: $('precio').value };
+  if (usuario.tipo === 'PT') body.idCliente = $('idCliente').value;
+  try {
+    const r = await api('/api/pedidos', { method: 'POST', body });
+    mostrarAlerta(msg, 'Pedido #' + r.pedido.idPedido + ' guardado correctamente.', 'ok');
+    ['idProducto','producto','marca','unidad','precio'].forEach(k => $(k).value = '');
+    $('idProducto').focus();
+  } catch (err) { mostrarAlerta(msg, err.message); }
+});
+</script>
+</body></html>

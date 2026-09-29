@@ -1,0 +1,21 @@
+COLOCA AQUI TUS IMAGENES (con estos nombres exactos, en .jpg):
+
+PAGINA DE INICIO - Carrusel (5):
+  carrusel-1.jpg
+  carrusel-2.jpg
+  carrusel-3.jpg
+  carrusel-4.jpg
+  carrusel-5.jpg
+
+PAGINA DE INICIO - Categorias (3):
+  categoria-comics.jpg      (Comics y Revistas)
+  categoria-albumes.jpg     (Albumes Coleccionables)
+  categoria-figuras.jpg     (Figuras y Articulos de Coleccion)
+
+FONDO de Registrar / Consultar / Administrar pedidos (1 sola imagen):
+  fondo-pedidos.jpg
+
+Registro de usuarios e Inicio de sesion NO llevan imagenes.
+
+Si usas .png u otro formato, cambia la extension en public/index.html
+y en public/css/estilos.css (busca "fondo-pedidos").

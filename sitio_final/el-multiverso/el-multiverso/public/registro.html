@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/estilos.css"><title>Registro | El Multiverso</title></head>
+<body>
+<header id="barra"></header>
+<main class="centro">
+  <form class="tarjeta registro" id="formReg" novalidate>
+    <h1>Registro de Nuevo Usuario</h1>
+    <div id="msg" class="alerta oculto" role="alert"></div>
+    <div class="grid-3">
+      <div class="campo"><label for="id">ID Usuario (4 dígitos):</label><input id="id" placeholder="Ej. 1001" inputmode="numeric" maxlength="4"></div>
+      <div class="campo"><label for="nombre">Nombre:</label><input id="nombre" autocomplete="given-name"></div>
+      <div class="campo"><label for="paterno">A. Paterno:</label><input id="paterno" autocomplete="family-name"></div>
+      <div class="campo"><label for="materno">A. Materno:</label><input id="materno"></div>
+      <div class="campo"><label for="edad">Edad:</label><input id="edad" type="number" min="1" max="120"></div>
+      <div class="campo"><label for="sexo">Sexo:</label>
+        <select id="sexo"><option>Masculino</option><option>Femenino</option><option>Otro</option></select></div>
+      <div class="campo"><label for="tipo">Tipo de Usuario:</label>
+        <select id="tipo"><option value="CT">Cliente (CT)</option><option value="PT">Administrador (PT)</option></select></div>
+      <div class="campo"><label for="correo">Correo Electrónico:</label><input id="correo" type="email" placeholder="correo@ejemplo.com"></div>
+      <div class="campo"><label for="telefono">Teléfono:</label><input id="telefono" inputmode="numeric" maxlength="10" placeholder="10 dígitos"></div>
+    </div>
+    <div class="grid-2">
+      <div class="campo"><label for="password">Contraseña:</label><input id="password" type="password" autocomplete="new-password">
+        <div class="ayuda">Deberá contener mínimo 8 caracteres, al menos una mayúscula, números y un símbolo.</div></div>
+      <div class="campo"><label for="confirmar">Confirmar Contraseña:</label><input id="confirmar" type="password" autocomplete="new-password"></div>
+    </div>
+    <div class="acciones">
+      <button class="btn btn-azul" type="submit">Registrar Cuenta</button>
+      <a class="btn btn-borde" href="/">Cancelar</a>
+    </div>
+  </form>
+</main>
+<script src="/js/app.js"></script>
+<script>
+iniciarBarra();
+const $ = id => document.getElementById(id);
+document.getElementById('formReg').addEventListener('submit', async e => {
+  e.preventDefault();
+  const msg = $('msg');
+  const b = {}; ['id','nombre','paterno','materno','edad','sexo','tipo','correo','telefono','password','confirmar'].forEach(k => b[k] = $(k).value);
+  if (!/^\d{4}$/.test(b.id)) return mostrarAlerta(msg, 'El ID de usuario debe tener 4 dígitos.');
+  if (!b.nombre.trim() || !b.paterno.trim() || !b.materno.trim()) return mostrarAlerta(msg, 'Nombre y apellidos son obligatorios.');
+  if (!b.edad || b.edad < 1 || b.edad > 120) return mostrarAlerta(msg, 'Ingresa una edad válida.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.correo)) return mostrarAlerta(msg, 'Correo electrónico no válido.');
+  if (!/^\d{10}$/.test(b.telefono)) return mostrarAlerta(msg, 'El teléfono debe tener 10 dígitos.');
+  if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(b.password)) return mostrarAlerta(msg, 'La contraseña debe tener mínimo 8 caracteres, una mayúscula, un número y un símbolo.');
+  if (b.password !== b.confirmar) return mostrarAlerta(msg, 'Las contraseñas no coinciden.');
+  try {
+    await api('/api/registro', { method: 'POST', body: b });
+    mostrarAlerta(msg, 'Cuenta creada. Redirigiendo para iniciar sesión...', 'ok');
+    setTimeout(() => location.href = '/login.html', 1200);
+  } catch (err) { mostrarAlerta(msg, err.message); }
+});
+</script>
+</body></html>

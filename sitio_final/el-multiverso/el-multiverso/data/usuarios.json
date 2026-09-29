@@ -1,0 +1,26 @@
+[
+  {
+    "id": "0000",
+    "nombre": "Administrador",
+    "paterno": "Sistema",
+    "materno": "",
+    "edad": 30,
+    "sexo": "Masculino",
+    "tipo": "PT",
+    "correo": "admin@elmultiverso.com",
+    "telefono": "0000000000",
+    "password": "dd7620b2525493f2b337ce4a7119ec7c:7337653582309f192f6ade63039cf58b8ce1a78847a0164df34714d7e3ebc793dbf373ad403869128cc85971b57c71d55feecf73fb3cc2d0b238719373995236"
+  },
+  {
+    "id": "9999",
+    "nombre": "Cliente",
+    "paterno": "Demo",
+    "materno": "",
+    "edad": 25,
+    "sexo": "Masculino",
+    "tipo": "CT",
+    "correo": "cliente@elmultiverso.com",
+    "telefono": "0000000000",
+    "password": "9394ee4bdd332a2b6e28c3b4e88229cd:0ce5ef2d0dc6d33c7185883736b3ec11a0e40a8b04d40d089a44cc6fe6796d51f880c84bfd422625a4b751571ff7e30ac16823444c718e98a0d9b2cac24e3a8b"
+  }
+]
