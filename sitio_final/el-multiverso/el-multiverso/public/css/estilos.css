@@ -120,3 +120,12 @@ body.con-fondo footer{color:#ccc}
   .carrusel{aspect-ratio:16/10}
 }
 @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+/* ---------- Distintivo de verificación en 2 pasos (solo icono; se despliega al pasar el mouse) ---------- */
+.verificacion-2fa{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;align-items:center;height:40px;width:40px;border-radius:6px;background:#3a63f0;color:#fff;overflow:hidden;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.28);transition:width .25s ease;cursor:default}
+.verificacion-2fa:hover,.verificacion-2fa:focus-within{width:198px}
+.verificacion-2fa .icono{flex:0 0 40px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:#fff}
+.verificacion-2fa .icono svg{width:22px;height:22px}
+.verificacion-2fa .texto{padding:0 12px;font-size:.72rem;font-weight:600;line-height:1.2}
+.verificacion-2fa:focus-within{outline:2px solid #86b7fe;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.verificacion-2fa{transition:none}}

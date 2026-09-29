@@ -22,5 +22,41 @@
     "correo": "cliente@elmultiverso.com",
     "telefono": "0000000000",
     "password": "9394ee4bdd332a2b6e28c3b4e88229cd:0ce5ef2d0dc6d33c7185883736b3ec11a0e40a8b04d40d089a44cc6fe6796d51f880c84bfd422625a4b751571ff7e30ac16823444c718e98a0d9b2cac24e3a8b"
+  },
+  {
+    "id": "7777",
+    "nombre": "Juan",
+    "paterno": "Perez",
+    "materno": "Gonzalez",
+    "edad": 28,
+    "sexo": "Masculino",
+    "tipo": "CT",
+    "correo": "juan.perez@gmail.com",
+    "telefono": "3111234567",
+    "password": "cec4da845fe632a3d969448fca6ee8d3:1909ac72fa6a2e2b77bb7ebcbf52899d19c0ba803428a3e314d642e04ff0e86aab32f8fea4bdcf74d49d226aa5e329618c6d4815115771aea42348cc0e5407a0"
+  },
+  {
+    "id": "8888",
+    "nombre": "Jose",
+    "paterno": "Fuentes",
+    "materno": "Flores",
+    "edad": 26,
+    "sexo": "Masculino",
+    "tipo": "CT",
+    "correo": "jose.fuentes@gmail.com",
+    "telefono": "3111942678",
+    "password": "aa7f1a12e833e422195d29a7626f889b:06a099c43425141e1b878da4d9707771bd297298d15175af150787ca70a57ac599fe208562be9d86343aabb45ead218d52ae95f220a0baab5668f537248070ca"
+  },
+  {
+    "id": "0001",
+    "nombre": "Joel",
+    "paterno": "Creano",
+    "materno": "Rodriguez",
+    "edad": 20,
+    "sexo": "Masculino",
+    "tipo": "PT",
+    "correo": "correodeejemplo@gmail.com",
+    "telefono": "3113767292",
+    "password": "d0c3dfb222428251698a777246fc1d96:ab6f655bcf4fb190a9001ee076c07c17dd1993466a49d9e82cb614073465a55ec46bad585b0a39e261532e3d2db3355fbdf1847cbe7206def2eae55a3481dd18"
   }
 ]

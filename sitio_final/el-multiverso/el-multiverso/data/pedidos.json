@@ -7,5 +7,41 @@
     "marca": "Marvel",
     "unidad": "1 pieza",
     "precio": 100
+  },
+  {
+    "idPedido": 2,
+    "idCliente": "9999",
+    "idProducto": "9999",
+    "producto": "Album coleccion avengers",
+    "marca": "Marvel",
+    "unidad": "Coleccion",
+    "precio": 1500
+  },
+  {
+    "idPedido": 3,
+    "idCliente": "9999",
+    "idProducto": "8502",
+    "producto": "Action Comic 1 1938",
+    "marca": "DC Comics",
+    "unidad": "Pieza",
+    "precio": 80
+  },
+  {
+    "idPedido": 4,
+    "idCliente": "7777",
+    "idProducto": "808",
+    "producto": "Figura Superman",
+    "marca": "DC Comics",
+    "unidad": "Pieza",
+    "precio": 1200
+  },
+  {
+    "idPedido": 5,
+    "idCliente": "8888",
+    "idProducto": "604",
+    "producto": "Comic Fantastic 4",
+    "marca": "Marvel",
+    "unidad": "Pieza",
+    "precio": 80
   }
 ]
